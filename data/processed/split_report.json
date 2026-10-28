@@ -1,0 +1,24 @@
+{
+  "seed": 42,
+  "steam_validation_user_ratio": 0.2,
+  "heldout_game_ratio": 0.2,
+  "minimum_games_per_evaluation_user": 5,
+  "candidate_games_learned_from_steam_train": 4399,
+  "steam_train": {
+    "users": 63478,
+    "interactions": 4334384,
+    "games": 4399
+  },
+  "steam_validation": {
+    "users": 12657,
+    "observed_interactions": 857969,
+    "heldout_interactions": 220842
+  },
+  "playstation_test": {
+    "users": 44743,
+    "observed_interactions": 2935859,
+    "heldout_interactions": 756404
+  },
+  "ps_users_excluded_for_insufficient_shared_games": 1545,
+  "ps_interactions_not_in_steam_train_catalog": 109
+}
