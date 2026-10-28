@@ -1,7 +1,10 @@
 """
 Step 01: inspect the raw Steam / PlayStation CSVs.
 
-Paths and column names match the files under data/raw.
+Inputs:  data/raw/steam/*/games.csv, data/raw/steam/*/users_games.csv,
+         data/raw/playstation/games.csv, data/raw/playstation/purchased_games.csv
+Outputs: data/interim/raw_audit.json, data/interim/raw_audit.md
+
 data/raw/archive is a different dump and is not part of this audit.
 """
 
@@ -59,20 +62,20 @@ def read_sample(path: Path, sample_rows: int) -> pd.DataFrame:
     )
 
 # Discover the files in the data/raw directory
-def discover(root: Path) -> tuple[list[tuple[str, Path]], list[str]]:
+def discover(raw: Path) -> tuple[list[tuple[str, Path]], list[str]]:
     found: list[tuple[str, Path]] = []
     missing: list[str] = []
     for kind, pattern in LAYOUT: # Checking for the files in the data/raw directory
-        matches = sorted(root.glob(pattern))
+        matches = sorted(raw.glob(pattern))
         if not matches:
             missing.append(pattern)
         found.extend((kind, path) for path in matches)
     return found, missing
 
 
-def inspect(path: Path, root: Path, sample_rows: int, kind: str) -> dict:
+def inspect(path: Path, raw: Path, sample_rows: int, kind: str) -> dict:
     info = {
-        'path': path.relative_to(root).as_posix(),
+        'path': path.relative_to(raw).as_posix(),
         'kind': kind,
         'status': 'ok',
         'sample_limit': sample_rows,
@@ -239,15 +242,15 @@ def as_markdown(report: dict) -> str:
 
 
 def main() -> int:
-    root = Path('data/raw') # The root directory of the data
-    out = Path('data/interim') # The output directory for the report
+    raw = Path('data/raw')
+    out = Path('data/interim')
     sample_rows = 50000 # The maximum number of rows to sample from each file
 
-    discovered, missing = discover(root) # Discover the files in the data/raw directory
+    discovered, missing = discover(raw) # Discover the files in the data/raw directory
     files = [] # A list of dictionaries, one for each file
 
     for kind, path in discovered:
-        result = inspect(path, root, sample_rows, kind) # Inspect the file
+        result = inspect(path, raw, sample_rows, kind) # Inspect the file
         files.append(result) # Add the result to the list
         rel = result['path']
 

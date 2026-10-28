@@ -1,0 +1,44 @@
+{
+  "steam_metadata_rows": 34088,
+  "ps_metadata_rows": 23151,
+  "steam_rows_missing_id_or_title": 0,
+  "steam_ids_with_conflicting_titles": 0,
+  "ps_rows_missing_id_or_title": 0,
+  "ps_ids_with_conflicting_titles": 0,
+  "ambiguous_steam_titles_excluded": 68,
+  "ps_titles_with_multiple_ids": 5385,
+  "steam_games_available_for_matching": 33947,
+  "ps_games_available_for_matching": 23151,
+  "shared_unique_titles": 4406,
+  "matched_steam_game_ids": 4406,
+  "matched_ps_game_ids": 8337,
+  "mapping_rows": 8337,
+  "ps_platform_counts": {
+    "PS4": 14163,
+    "PS5": 6422,
+    "PS3": 1571,
+    "PS Vita": 995
+  },
+  "ps_purchase_coverage": {
+    "users_checked": 46582,
+    "unique_owned_ps_game_ids": 29296,
+    "owned_ps_ids_missing_from_catalog": 7231,
+    "missing_ps_id_examples": [
+      "10007",
+      "10012",
+      "1002",
+      "10022",
+      "1004",
+      "1006",
+      "10067",
+      "1007",
+      "10073",
+      "1010"
+    ],
+    "invalid_libraries": 0,
+    "users_with_at_least_2_shared_games": 45935,
+    "users_with_at_least_5_shared_games": 44743,
+    "users_with_at_least_10_shared_games": 42692,
+    "median_shared_games_per_user": 56.0
+  }
+}
