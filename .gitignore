@@ -1,1 +1,5 @@
+# Python virtual environment
 .venv/
+
+# Raw data
+data/raw/
