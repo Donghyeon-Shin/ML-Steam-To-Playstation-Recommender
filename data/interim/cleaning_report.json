@@ -1,0 +1,23 @@
+{
+  "steam": {
+    "input_rows": 25228753,
+    "matched_rows": 5606104,
+    "invalid_playtimes_replaced": 0,
+    "clean_rows": 5413203,
+    "duplicate_pairs_collapsed": 192901,
+    "unique_users": 76135,
+    "unique_games": 4406,
+    "zero_forever_playtime_rows": 2046448
+  },
+  "playstation": {
+    "input_users": 46582,
+    "unparsed_libraries": 0,
+    "empty_user_ids": 0,
+    "owned_ids_without_shared_match": 6932710,
+    "duplicate_mapped_ids_collapsed": 264510,
+    "clean_rows": 3696332,
+    "unique_users": 46288,
+    "unique_games": 4369,
+    "users_with_at_least_5_games": 44743
+  }
+}
