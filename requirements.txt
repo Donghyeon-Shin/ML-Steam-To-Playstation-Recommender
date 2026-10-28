@@ -1,0 +1,20 @@
+
+# Main tabular and numerical stack
+numpy>=2.0,<3
+pandas>=2.2,<4
+scipy>=1.14,<2
+scikit-learn>=1.7,<2
+
+# Implicit-feedback recommendation models
+implicit==0.7.3
+
+# Matching and columnar storage
+rapidfuzz>=3.9,<4
+pyarrow>=18
+
+# Experiment utilities / notebooks
+tqdm>=4.66
+matplotlib>=3.8
+jupyterlab>=4.2
+ipykernel>=6.29
+pytest>=8
