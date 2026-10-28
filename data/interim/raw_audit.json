@@ -1,0 +1,294 @@
+{
+  "created_utc": "2026-10-28T15:08:00+00:00",
+  "sample_rows_per_file": 50000,
+  "files_found": 10,
+  "missing_patterns": [],
+  "files": [
+    {
+      "path": "steam/0/games.csv",
+      "kind": "steam_games",
+      "status": "ok",
+      "sample_limit": 50000,
+      "columns": [
+        "id",
+        "name",
+        "numReviews",
+        "avgReviewScore",
+        "price",
+        "genres",
+        "tags",
+        "description",
+        "numFollowers"
+      ],
+      "rows_sampled": 4,
+      "sample_covers_whole_file": true,
+      "empty_cells_in_sample": {},
+      "duplicate_game_ids_in_sample": 0,
+      "unique_games_in_sample": 4,
+      "duplicate_casefold_titles_in_sample": 0
+    },
+    {
+      "path": "steam/20000/games.csv",
+      "kind": "steam_games",
+      "status": "ok",
+      "sample_limit": 50000,
+      "columns": [
+        "id",
+        "name",
+        "numReviews",
+        "avgReviewScore",
+        "price",
+        "genres",
+        "tags",
+        "description",
+        "numFollowers"
+      ],
+      "rows_sampled": 33923,
+      "sample_covers_whole_file": true,
+      "empty_cells_in_sample": {
+        "description": 8
+      },
+      "duplicate_game_ids_in_sample": 0,
+      "unique_games_in_sample": 33923,
+      "duplicate_casefold_titles_in_sample": 62
+    },
+    {
+      "path": "steam/39935/games.csv",
+      "kind": "steam_games",
+      "status": "ok",
+      "sample_limit": 50000,
+      "columns": [
+        "id",
+        "name",
+        "numReviews",
+        "avgReviewScore",
+        "price",
+        "genres",
+        "tags",
+        "description",
+        "numFollowers"
+      ],
+      "rows_sampled": 42,
+      "sample_covers_whole_file": true,
+      "empty_cells_in_sample": {
+        "description": 1
+      },
+      "duplicate_game_ids_in_sample": 0,
+      "unique_games_in_sample": 42,
+      "duplicate_casefold_titles_in_sample": 0
+    },
+    {
+      "path": "steam/59526/games.csv",
+      "kind": "steam_games",
+      "status": "ok",
+      "sample_limit": 50000,
+      "columns": [
+        "id",
+        "name",
+        "numReviews",
+        "avgReviewScore",
+        "price",
+        "genres",
+        "tags",
+        "description",
+        "numFollowers"
+      ],
+      "rows_sampled": 119,
+      "sample_covers_whole_file": true,
+      "empty_cells_in_sample": {},
+      "duplicate_game_ids_in_sample": 0,
+      "unique_games_in_sample": 119,
+      "duplicate_casefold_titles_in_sample": 0
+    },
+    {
+      "path": "steam/0/users_games.csv",
+      "kind": "steam_user_games",
+      "status": "ok",
+      "sample_limit": 50000,
+      "columns": [
+        "user_id",
+        "game_id",
+        "playtime_2weeks",
+        "playtime_forever"
+      ],
+      "rows_sampled": 50000,
+      "sample_covers_whole_file": false,
+      "empty_cells_in_sample": {},
+      "unique_users_in_sample": 462,
+      "unique_games_in_sample": 11534,
+      "duplicate_user_game_pairs_in_sample": 0,
+      "playtime_minutes": {
+        "playtime_2weeks": {
+          "non_numeric_or_empty": 0,
+          "zero_values": 48917,
+          "negative_values": 0,
+          "median": 0,
+          "p99": 156.0,
+          "max": 12796
+        },
+        "playtime_forever": {
+          "non_numeric_or_empty": 0,
+          "zero_values": 17945,
+          "negative_values": 0,
+          "median": 40,
+          "p99": 42046.3,
+          "max": 776153
+        }
+      }
+    },
+    {
+      "path": "steam/20000/users_games.csv",
+      "kind": "steam_user_games",
+      "status": "ok",
+      "sample_limit": 50000,
+      "columns": [
+        "user_id",
+        "game_id",
+        "playtime_2weeks",
+        "playtime_forever"
+      ],
+      "rows_sampled": 50000,
+      "sample_covers_whole_file": false,
+      "empty_cells_in_sample": {},
+      "unique_users_in_sample": 33,
+      "unique_games_in_sample": 10819,
+      "duplicate_user_game_pairs_in_sample": 1077,
+      "playtime_minutes": {
+        "playtime_2weeks": {
+          "non_numeric_or_empty": 0,
+          "zero_values": 49930,
+          "negative_values": 0,
+          "median": 0,
+          "p99": 0,
+          "max": 18601
+        },
+        "playtime_forever": {
+          "non_numeric_or_empty": 0,
+          "zero_values": 22866,
+          "negative_values": 0,
+          "median": 34,
+          "p99": 2513.0,
+          "max": 693879
+        }
+      }
+    },
+    {
+      "path": "steam/39935/users_games.csv",
+      "kind": "steam_user_games",
+      "status": "ok",
+      "sample_limit": 50000,
+      "columns": [
+        "user_id",
+        "game_id",
+        "playtime_2weeks",
+        "playtime_forever"
+      ],
+      "rows_sampled": 50000,
+      "sample_covers_whole_file": false,
+      "empty_cells_in_sample": {},
+      "unique_users_in_sample": 303,
+      "unique_games_in_sample": 9166,
+      "duplicate_user_game_pairs_in_sample": 0,
+      "playtime_minutes": {
+        "playtime_2weeks": {
+          "non_numeric_or_empty": 0,
+          "zero_values": 49403,
+          "negative_values": 0,
+          "median": 0,
+          "p99": 10,
+          "max": 16350
+        },
+        "playtime_forever": {
+          "non_numeric_or_empty": 0,
+          "zero_values": 13699,
+          "negative_values": 0,
+          "median": 128,
+          "p99": 34981.7,
+          "max": 936486
+        }
+      }
+    },
+    {
+      "path": "steam/59526/users_games.csv",
+      "kind": "steam_user_games",
+      "status": "ok",
+      "sample_limit": 50000,
+      "columns": [
+        "user_id",
+        "game_id",
+        "playtime_2weeks",
+        "playtime_forever"
+      ],
+      "rows_sampled": 50000,
+      "sample_covers_whole_file": false,
+      "empty_cells_in_sample": {},
+      "unique_users_in_sample": 816,
+      "unique_games_in_sample": 5683,
+      "duplicate_user_game_pairs_in_sample": 0,
+      "playtime_minutes": {
+        "playtime_2weeks": {
+          "non_numeric_or_empty": 0,
+          "zero_values": 48157,
+          "negative_values": 0,
+          "median": 0,
+          "p99": 491,
+          "max": 19992
+        },
+        "playtime_forever": {
+          "non_numeric_or_empty": 0,
+          "zero_values": 14501,
+          "negative_values": 0,
+          "median": 78,
+          "p99": 73966.1,
+          "max": 673217
+        }
+      }
+    },
+    {
+      "path": "playstation/games.csv",
+      "kind": "playstation_games",
+      "status": "ok",
+      "sample_limit": 50000,
+      "columns": [
+        "gameid",
+        "title",
+        "platform",
+        "developers",
+        "publishers",
+        "genres",
+        "supported_languages",
+        "release_date"
+      ],
+      "rows_sampled": 23151,
+      "sample_covers_whole_file": true,
+      "empty_cells_in_sample": {
+        "developers": 17,
+        "publishers": 11,
+        "genres": 142,
+        "supported_languages": 12537
+      },
+      "duplicate_game_ids_in_sample": 0,
+      "unique_games_in_sample": 23151,
+      "duplicate_casefold_titles_in_sample": 12071
+    },
+    {
+      "path": "playstation/purchased_games.csv",
+      "kind": "playstation_purchases",
+      "status": "ok",
+      "sample_limit": 50000,
+      "columns": [
+        "playerid",
+        "library"
+      ],
+      "rows_sampled": 46582,
+      "sample_covers_whole_file": true,
+      "empty_cells_in_sample": {},
+      "duplicate_user_ids_in_sample": 0,
+      "unique_users_in_sample": 46582,
+      "unique_games_in_sample": 29296,
+      "empty_libraries_in_sample": 0,
+      "unparsed_libraries_in_sample": 0,
+      "duplicate_ids_inside_libraries_in_sample": 7
+    }
+  ]
+}
