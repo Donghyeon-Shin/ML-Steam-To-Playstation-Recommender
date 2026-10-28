@@ -96,6 +96,7 @@ def clean_playstation(raw: Path, out: Path, mapping: dict[str, str]) -> dict:
             stats['unparsed_libraries'] += 1
             continue
 
+        # Keep matched games from this library as one (user, game) pair each.
         mapped = [
             mapping[str(game_id).strip()]
             for game_id in ids if str(game_id).strip() in mapping
