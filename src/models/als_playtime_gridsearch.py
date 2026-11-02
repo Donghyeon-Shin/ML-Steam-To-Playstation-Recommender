@@ -1,7 +1,7 @@
 
 import os
 
-# OpenBLAS 스레드 설정
+# Limit OpenBLAS to one thread.
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 
 from pathlib import Path
@@ -24,7 +24,7 @@ from als_playtime import (
 
 
 # ============================================================
-# 1. 설정
+# 1. Configuration
 # ============================================================
 
 PROJECT_DIR = Path(__file__).resolve().parents[2]
@@ -38,12 +38,12 @@ TOP_K = 10
 BATCH_SIZE = 256
 RANDOM_STATE = 42
 
-# ALS 하이퍼파라미터
+# ALS hyperparameters
 FACTOR_GRID = [24]
 REGULARIZATION_GRID = [5.0]
 ITERATION_GRID = [40]
 
-# 플레이타임 가중치
+# Playtime weight values
 PLAYTIME_BETA_GRID = [
     0.1,
     0.25,
@@ -51,7 +51,7 @@ PLAYTIME_BETA_GRID = [
     1.0
 ]
 
-# 플레이타임 상한값 분위수
+# Playtime cap percentiles
 PLAYTIME_CAP_PERCENTILE_GRID = [
     0.50,
     0.75,
@@ -62,35 +62,37 @@ PLAYTIME_CAP_PERCENTILE_GRID = [
 
 
 # ============================================================
-# 2. 학습 데이터 준비
+# 2. Training data preparation
 # ============================================================
 
 def prepare_train_data(train_df):
     """
-    Steam Train의 사용자·게임 인덱스를 생성합니다.
+    Create user and game indices for Steam Train.
 
-    플레이타임 원본은 시간 단위로 변환하여 보관합니다.
+    Convert raw playtimes to hours for later use.
     """
 
-    # 사용자 인덱싱
+    # factorize() returns integer codes and distinct original IDs. Codes
+    # become row indices; user_ids maps rows back to Steam user IDs.
+    # sort=True sorts unique IDs while preserving their code mapping.
     user_indices, user_ids = pd.factorize(
         train_df["user_id"],
         sort=True
     )
 
-    # 게임 인덱싱
+    # Game codes become column indices; game_ids is the reverse lookup.
     game_indices, game_ids = pd.factorize(
         train_df["unified_game_id"],
         sort=True
     )
 
-    # 분 → 시간
+    # Convert minutes to hours.
     playtime_hours = (
         train_df["playtime_forever"]
         .to_numpy(dtype=np.float64) / 60
     )
 
-    # 게임 ID → 행렬 인덱스
+    # Map game IDs to matrix column indices.
     game_to_idx = {
         game_id: idx
         for idx, game_id in enumerate(game_ids)
@@ -112,13 +114,12 @@ def prepare_train_data(train_df):
 
 
 # ============================================================
-# 3. 상한값 후보 계산
+# 3. Calculate candidate playtime caps
 # ============================================================
 
 def calculate_cap_grid(playtime_hours):
     """
-    Steam Train의 양수 플레이타임을 기준으로
-    분위수별 상한값을 계산합니다.
+    Calculate percentile-based caps from positive Steam Train playtimes.
     """
 
     positive_hours = playtime_hours[
@@ -127,7 +128,7 @@ def calculate_cap_grid(playtime_hours):
 
     if len(positive_hours) == 0:
         raise ValueError(
-            "학습 데이터에 양수 플레이타임이 없습니다."
+            "The training data contain no positive playtime values."
         )
 
     cap_grid = []
@@ -150,7 +151,7 @@ def calculate_cap_grid(playtime_hours):
 
 
 # ============================================================
-# 4. Weighted ALS 학습 행렬 생성
+# 4. Weighted ALS training matrix construction
 # ============================================================
 
 def build_train_matrix(
@@ -161,8 +162,7 @@ def build_train_matrix(
     beta
 ):
     """
-    지정된 Beta와 로그 플레이타임으로
-    학습용 CSR 행렬을 생성합니다.
+    Build a training CSR matrix from beta and log-transformed playtimes.
 
     c_ui = 1 + OWNER_ALPHA + beta * log_playtime
     """
@@ -173,6 +173,10 @@ def build_train_matrix(
         + beta * log_playtime
     ).astype(np.float32)
 
+    # CSR avoids storing the many unobserved user-game pairs as dense zeros.
+    # log-playtime-weighted confidence[i] is stored at the row/column pair
+    # (user_indices[i], game_indices[i]); matrix_shape fixes both dimensions
+    # and dtype specifies 32-bit floating-point confidence values.
     train_matrix = csr_matrix(
         (
             confidence,
@@ -189,7 +193,7 @@ def build_train_matrix(
 
 
 # ============================================================
-# 5. 기존 실험 결과 불러오기
+# 5. Load existing experiment results
 # ============================================================
 
 def make_param_key(
@@ -201,9 +205,9 @@ def make_param_key(
     cap_hours
 ):
     """
-    중복 실험 확인을 위한 파라미터 키입니다.
+    Build a parameter key for identifying completed experiments.
 
-    실수 비교 오차를 줄이기 위해 반올림합니다.
+    Round floating-point values to avoid comparison discrepancies.
     """
 
     return (
@@ -218,7 +222,7 @@ def make_param_key(
 
 def load_existing_results():
     """
-    기존 CSV를 불러오고 완료된 실험 조합을 추출합니다.
+    Load the existing CSV and identify completed parameter combinations.
     """
 
     if not RESULT_PATH.exists():
@@ -245,7 +249,7 @@ def load_existing_results():
 
     if missing:
         raise ValueError(
-            f"기존 CSV에 필수 컬럼이 없습니다: {missing}"
+            f"Existing CSV is missing required columns: {missing}"
         )
 
     completed_params = {
@@ -276,10 +280,9 @@ def grid_search(
     cap_grid
 ):
     """
-    Beta와 플레이타임 상한값을 함께 탐색합니다.
+    Search over beta values and playtime caps together.
 
-    기존에 완료한 실험은 건너뛰고
-    새로운 결과만 CSV에 추가합니다.
+    Skip completed experiments and append only new results to the CSV.
     """
 
     RESULT_DIR.mkdir(
@@ -296,11 +299,11 @@ def grid_search(
         _
     ) = train_data
 
-    # 기존 실험 결과 확인
+    # Check existing experiment results.
     existing_df, completed_params = load_existing_results()
 
     # --------------------------------------------------------
-    # 1. 전체 실험 조합 생성
+    # 1. Generate all experiment combinations.
     # --------------------------------------------------------
 
     combinations = []
@@ -329,7 +332,7 @@ def grid_search(
             ))
 
     # --------------------------------------------------------
-    # 2. 이미 완료한 조합 제외
+    # 2. Exclude completed combinations.
     # --------------------------------------------------------
 
     remaining = []
@@ -361,19 +364,19 @@ def grid_search(
     print("Playtime Weighted ALS Grid Search")
     print("=" * 60)
 
-    print(f"기존 실험 결과: {len(existing_df)}개")
-    print(f"전체 탐색 조합: {len(combinations)}개")
-    print(f"새로 실행할 조합: {len(remaining)}개")
-    print(f"평가 사용자 수: {len(val_user_ids):,}명")
+    print(f"Existing experiments: {len(existing_df)}")
+    print(f"Search combinations: {len(combinations)}")
+    print(f"Remaining combinations: {len(remaining)}")
+    print(f"Evaluation users: {len(val_user_ids):,}")
 
     total_start = perf_counter()
 
-    # 현재 계산된 상한값
+    # Cache the most recently computed cap transformation.
     current_cap = None
     log_playtime = None
 
     # --------------------------------------------------------
-    # 3. 실험 수행
+    # 3. Run experiments.
     # --------------------------------------------------------
 
     for experiment_idx, combination in enumerate(
@@ -392,7 +395,7 @@ def grid_search(
 
         print("\n" + "-" * 60)
         print(
-            f"실험 {experiment_idx}/{len(remaining)}"
+            f"Experiment {experiment_idx}/{len(remaining)}"
         )
         print("-" * 60)
 
@@ -412,10 +415,10 @@ def grid_search(
         start_time = perf_counter()
 
         # ----------------------------------------------------
-        # 4. 상한값별 로그 플레이타임 계산
+        # 4. Compute log-playtime values for the current cap.
         # ----------------------------------------------------
 
-        # 상한값이 바뀌었을 때만 다시 계산
+        # Recompute only when the cap changes.
         if current_cap != cap_hours:
 
             clipped_hours = np.minimum(
@@ -430,7 +433,7 @@ def grid_search(
             current_cap = cap_hours
 
         # ----------------------------------------------------
-        # 5. Beta별 학습 행렬 생성
+        # 5. Build the training matrix for each beta.
         # ----------------------------------------------------
 
         train_matrix = build_train_matrix(
@@ -442,25 +445,30 @@ def grid_search(
         )
 
         # ----------------------------------------------------
-        # 6. ALS 모델 생성 및 학습
+        # 6. Create and train the ALS model.
         # ----------------------------------------------------
 
+        # The implicit CPU ALS class factorizes confidence-weighted user/game
+        # interactions; one model is trained for each grid-search combination.
+        # API: https://benfred.github.io/implicit/api/models/cpu/als.html
         model = AlternatingLeastSquares(
-            factors=factors,
-            regularization=regularization,
-            iterations=iterations,
-            alpha=1.0,
-            random_state=RANDOM_STATE,
-            dtype=np.float32
+            factors=factors,                # Number of latent dimensions
+            regularization=regularization,  # L2 penalty against overfitting
+            iterations=iterations,          # ALS optimization passes
+            alpha=1.0,                     # Keep preweighted CSR confidence
+            random_state=RANDOM_STATE,     # Seed factor initialization
+            dtype=np.float32               # Use 32-bit factor vectors
         )
 
+        # fit() learns user/game latent factors from the CSR confidence matrix.
+        # Missing interactions have zero preference and baseline confidence 1.
         model.fit(
-            train_matrix,
-            show_progress=False
+            train_matrix,        # User-by-game weighted confidence CSR
+            show_progress=False  # Suppress progress during grid search
         )
 
         # ----------------------------------------------------
-        # 7. Steam Validation 평가
+        # 7. Evaluate on Steam validation.
         # ----------------------------------------------------
 
         results_df = evaluate_all_users(
@@ -485,10 +493,10 @@ def grid_search(
         elapsed_seconds = perf_counter() - start_time
 
         # ----------------------------------------------------
-        # 8. 결과 기록
+        # 8. Record results.
         # ----------------------------------------------------
 
-        # 기존 CSV와 동일한 컬럼 구조 유지
+        # Preserve the existing CSV column structure.
         result = {
             "factors": factors,
             "regularization": regularization,
@@ -502,7 +510,7 @@ def grid_search(
             "elapsed_seconds": elapsed_seconds
         }
 
-        print("\n실험 결과")
+        print("\nExperiment Results")
 
         print(
             f"Recall@10: "
@@ -519,10 +527,10 @@ def grid_search(
             f"{mean_metrics['hit_at_10'] * 100:.2f}%"
         )
 
-        print(f"실행 시간: {elapsed_seconds:.2f}초")
+        print(f"Elapsed time: {elapsed_seconds:.2f} seconds")
 
         # ----------------------------------------------------
-        # 9. 기존 CSV에 결과 추가
+        # 9. Append results to the existing CSV.
         # ----------------------------------------------------
 
         file_exists = (
@@ -538,7 +546,7 @@ def grid_search(
             encoding="utf-8"
         )
 
-        # 완료 조합 등록
+        # Mark the parameter combination as completed.
         completed_params.add(
             make_param_key(
                 factors,
@@ -550,10 +558,10 @@ def grid_search(
             )
         )
 
-        print("CSV 저장 완료")
+        print("CSV saved")
 
     # --------------------------------------------------------
-    # 10. 누적 결과 불러오기
+    # 10. Reload accumulated results.
     # --------------------------------------------------------
 
     total_elapsed = perf_counter() - total_start
@@ -564,25 +572,25 @@ def grid_search(
     )
 
     print("\n" + "=" * 60)
-    print("Grid Search 완료")
+    print("Grid Search completed")
     print("=" * 60)
 
-    print(f"이번 실행 시간: {total_elapsed:.2f}초")
-    print(f"누적 실험 결과: {len(all_results)}개")
+    print(f"Current run time: {total_elapsed:.2f} seconds")
+    print(f"Total accumulated experiments: {len(all_results)}")
 
     return all_results
 
 
 # ============================================================
-# 7. 최적 조합 출력
+# 7. Display the best hyperparameters
 # ============================================================
 
 def print_best_result(results_df):
     """
-    NDCG@10 기준으로 최적 결과를 출력합니다.
+    Display the best results ranked by NDCG@10.
 
-    Beta=0은 Binary ALS와 동일하므로
-    Beta>0인 Weighted ALS 결과도 별도로 확인합니다.
+    Since beta=0 is equivalent to Binary ALS, also report
+    the best Weighted ALS result with beta>0.
     """
 
     sorted_results = (
@@ -598,10 +606,10 @@ def print_best_result(results_df):
     )
 
     print("\n" + "=" * 60)
-    print("전체 Grid Search 최종 결과")
+    print("Final Grid Search Results")
     print("=" * 60)
 
-    print("\nNDCG@10 기준 상위 10개 조합")
+    print("\nTop 10 combinations by NDCG@10")
 
     display_df = sorted_results[
         [
@@ -616,7 +624,7 @@ def print_best_result(results_df):
         ]
     ].head(10).copy()
 
-    # 백분율로 변환
+    # Convert metrics to percentages.
     for column in [
         "recall_at_10",
         "ndcg_at_10",
@@ -632,7 +640,7 @@ def print_best_result(results_df):
     )
 
     # --------------------------------------------------------
-    # Beta>0인 Weighted ALS 최적 결과
+    # Best Weighted ALS result with beta>0.
     # --------------------------------------------------------
 
     weighted_results = sorted_results[
@@ -640,13 +648,13 @@ def print_best_result(results_df):
     ]
 
     if weighted_results.empty:
-        print("\nBeta>0인 실험 결과가 없습니다.")
+        print("\nNo experiments with beta>0 were found.")
         return
 
     best = weighted_results.iloc[0]
 
     print("\n" + "=" * 60)
-    print("Playtime Weighted ALS 최적 하이퍼파라미터")
+    print("Best Playtime Weighted ALS Hyperparameters")
     print("=" * 60)
 
     print(f"Factors: {int(best['factors'])}")
@@ -654,9 +662,9 @@ def print_best_result(results_df):
     print(f"Iterations: {int(best['iterations'])}")
     print(f"Owner Alpha: {int(best['owner_alpha'])}")
     print(f"Playtime Beta: {best['playtime_beta']}")
-    print(f"Playtime Cap: {best['cap_hours']:.2f}시간")
+    print(f"Playtime Cap: {best['cap_hours']:.2f} hours")
 
-    print("\n최적 Weighted ALS 평가 성능")
+    print("\nBest Weighted ALS Evaluation Metrics")
 
     print(
         f"Recall@10: "
@@ -674,7 +682,7 @@ def print_best_result(results_df):
     )
 
     # --------------------------------------------------------
-    # Binary ALS와 비교
+    # Compare against Binary ALS.
     # --------------------------------------------------------
 
     binary_results = sorted_results[
@@ -690,7 +698,7 @@ def print_best_result(results_df):
             - best_binary["ndcg_at_10"]
         ) * 100
 
-        print("\nBinary ALS와 비교")
+        print("\nComparison with Binary ALS")
 
         print(
             f"Binary NDCG@10: "
@@ -703,21 +711,21 @@ def print_best_result(results_df):
         )
 
         print(
-            f"NDCG 차이: "
+            f"NDCG difference: "
             f"{ndcg_difference:+.2f}%p"
         )
 
-    print(f"\n전체 결과 저장: {RESULT_PATH}")
+    print(f"\nFull results saved to: {RESULT_PATH}")
 
 
 # ============================================================
-# 8. 메인 실행
+# 8. Main execution
 # ============================================================
 
 def main():
 
     # --------------------------------------------------------
-    # 1. 데이터 불러오기
+    # 1. Load data.
     # --------------------------------------------------------
 
     train_df = pd.read_parquet(
@@ -746,7 +754,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # 2. 데이터 검증
+    # 2. Validate data.
     # --------------------------------------------------------
 
     validate_interactions(
@@ -772,12 +780,12 @@ def main():
     print("Playtime Weighted ALS - Grid Search")
     print("=" * 60)
 
-    print(f"학습 데이터: {len(train_df):,}건")
-    print(f"Validation Observed: {len(val_observed):,}건")
-    print(f"Validation Heldout: {len(val_heldout):,}건")
+    print(f"Training interactions: {len(train_df):,}")
+    print(f"Validation observed: {len(val_observed):,}")
+    print(f"Validation held-out: {len(val_heldout):,}")
 
     # --------------------------------------------------------
-    # 3. 학습 데이터 준비
+    # 3. Prepare training data.
     # --------------------------------------------------------
 
     train_data = prepare_train_data(
@@ -793,31 +801,31 @@ def main():
         game_to_idx
     ) = train_data
 
-    print(f"\n학습 행렬 크기: {matrix_shape}")
-    print(f"추천 후보 게임: {len(game_ids):,}개")
+    print(f"\nTraining matrix shape: {matrix_shape}")
+    print(f"Candidate games: {len(game_ids):,}")
 
     # --------------------------------------------------------
-    # 4. 상한값 후보 계산
+    # 4. Calculate candidate caps.
     # --------------------------------------------------------
 
     cap_grid = calculate_cap_grid(
         playtime_hours
     )
 
-    print("\n플레이타임 상한값 후보")
+    print("\nPlaytime Cap Candidates")
 
     for percentile, cap_hours in cap_grid:
 
         print(
-            f"{percentile * 100:.0f}% 분위수: "
-            f"{cap_hours:.2f}시간"
+            f"{percentile * 100:.0f}th percentile: "
+            f"{cap_hours:.2f} hours"
         )
 
     # --------------------------------------------------------
-    # 5. Validation Fold-in 행렬 생성
+    # 5. Build the validation fold-in matrix.
     # --------------------------------------------------------
 
-    # 평가에서는 소유 정보만 사용합니다.
+    # Use ownership information only during evaluation.
     val_matrix, val_user_ids = build_validation_matrix(
         val_observed,
         game_ids,
@@ -838,7 +846,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # 7. 최적 결과 출력
+    # 7. Display the best results.
     # --------------------------------------------------------
 
     print_best_result(

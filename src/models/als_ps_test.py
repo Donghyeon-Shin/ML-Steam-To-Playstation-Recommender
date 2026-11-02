@@ -1,7 +1,7 @@
 
 import os
 
-# OpenBLAS 스레드 설정
+# Limit OpenBLAS to one thread.
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 
 from pathlib import Path
@@ -15,7 +15,7 @@ from implicit.cpu.als import AlternatingLeastSquares
 
 
 # ============================================================
-# 1. 설정
+# 1. Configuration
 # ============================================================
 
 PROJECT_DIR = Path(__file__).resolve().parents[2]
@@ -29,20 +29,20 @@ TOP_K = 10
 BATCH_SIZE = 256
 RANDOM_STATE = 42
 
-# 최종 ALS 파라미터
+# Final ALS hyperparameters
 FACTORS = 24
 REGULARIZATION = 5.0
 ITERATIONS = 40
 
 OWNER_ALPHA = 2
 
-# Weighted ALS 최종 설정
+# Final Weighted ALS configuration
 PLAYTIME_BETA = 0.1
 PLAYTIME_PERCENTILE = 0.75
 
 
 # ============================================================
-# 2. 데이터 검증
+# 2. Data validation
 # ============================================================
 
 def validate_interactions(df, name):
@@ -56,35 +56,37 @@ def validate_interactions(df, name):
 
     if missing:
         raise ValueError(
-            f"{name}: 필수 컬럼 누락 {missing}"
+            f"{name}: missing required columns {missing}"
         )
 
     if df[["user_id", "unified_game_id"]].isna().any().any():
         raise ValueError(
-            f"{name}: 사용자 또는 게임 ID 결측값"
+            f"{name}: missing user or game IDs"
         )
 
     if df.duplicated(
         ["user_id", "unified_game_id"]
     ).any():
         raise ValueError(
-            f"{name}: 사용자-게임 중복 기록"
+            f"{name}: duplicate user-game interactions"
         )
 
 
 # ============================================================
-# 3. Train 데이터 인덱싱
+# 3. Training data indexing
 # ============================================================
 
 def prepare_train_data(train_df):
 
-    # 사용자 인덱싱
+    # factorize() returns (codes, uniques): user_indices provides consecutive
+    # matrix row numbers and user_ids stores their original Steam IDs.
+    # sort=True sorts the unique IDs and remaps the codes consistently.
     user_indices, user_ids = pd.factorize(
         train_df["user_id"],
         sort=True
     )
 
-    # 게임 인덱싱
+    # Encode game IDs as column numbers; game_ids provides reverse lookup.
     game_indices, game_ids = pd.factorize(
         train_df["unified_game_id"],
         sort=True
@@ -110,7 +112,7 @@ def prepare_train_data(train_df):
 
 
 # ============================================================
-# 4. ALS 학습 행렬 생성
+# 4. ALS training matrix construction
 # ============================================================
 
 def build_train_matrix(
@@ -134,7 +136,7 @@ def build_train_matrix(
 
         if cap_hours is None:
             raise ValueError(
-                "Weighted ALS에는 cap_hours가 필요합니다."
+                "Weighted ALS requires cap_hours."
             )
 
         playtime_hours = (
@@ -161,6 +163,10 @@ def build_train_matrix(
             dtype=np.float32
         )
 
+    # Build a CSR (Compressed Sparse Row) confidence matrix without storing
+    # all unobserved user-game pairs. confidence[i] is placed at the pair
+    # (user_indices[i], game_indices[i]); matrix_shape fixes the full size
+    # and dtype=np.float32 controls stored value precision.
     train_matrix = csr_matrix(
         (
             confidence,
@@ -177,31 +183,35 @@ def build_train_matrix(
 
 
 # ============================================================
-# 5. ALS 학습
+# 5. ALS training
 # ============================================================
 
 def train_als(train_matrix, model_name):
 
+    # Implicit CPU ALS alternates optimization of latent user/game vectors.
+    # API: https://benfred.github.io/implicit/api/models/cpu/als.html
     model = AlternatingLeastSquares(
-        factors=FACTORS,
-        regularization=REGULARIZATION,
-        iterations=ITERATIONS,
-        alpha=1.0,
-        random_state=RANDOM_STATE,
-        dtype=np.float32
+        factors=FACTORS,                # Dimensions of latent vectors
+        regularization=REGULARIZATION,  # L2 penalty against overfitting
+        iterations=ITERATIONS,          # ALS optimization passes
+        alpha=1.0,                     # Preserve precomputed confidence
+        random_state=RANDOM_STATE,     # Seed factor initialization
+        dtype=np.float32               # Use 32-bit factor vectors
     )
 
-    print(f"\n{model_name} 학습 시작")
+    print(f"\nStarting {model_name} training")
 
+    # fit() learns factors from Steam's user-by-game confidence CSR. Missing
+    # interactions are unobserved with baseline confidence 1.
     model.fit(train_matrix)
 
-    print(f"{model_name} 학습 완료")
+    print(f"{model_name} training completed")
 
     return model
 
 
 # ============================================================
-# 6. PlayStation Fold-in 행렬 생성
+# 6. PlayStation fold-in matrix construction
 # ============================================================
 
 def build_ps_matrix(
@@ -210,12 +220,13 @@ def build_ps_matrix(
     game_to_idx
 ):
     """
-    PlayStation 사용자에게 관측된 게임을
-    Binary Confidence로 변환합니다.
+    Convert PlayStation users' observed games to binary confidence.
 
-    PlayStation 플레이타임은 사용하지 않습니다.
+    PlayStation playtimes are not used.
     """
 
+    # factorize() maps PS users to consecutive CSR row indices; ps_user_ids
+    # holds the sorted original PS IDs used to align evaluation results.
     user_indices, ps_user_ids = pd.factorize(
         ps_observed["user_id"],
         sort=True
@@ -241,6 +252,10 @@ def build_ps_matrix(
         dtype=np.float32
     )
 
+    # Construct PS users' sparse fold-in matrix with Steam game columns.
+    # The coordinate arrays identify each known user-game interaction and
+    # confidence provides its weight. The full shape includes all PS users
+    # and Steam candidate games, with absent pairs implicitly zero.
     ps_matrix = csr_matrix(
         (
             confidence,
@@ -259,15 +274,15 @@ def build_ps_matrix(
     unknown_count = (~known_mask).sum()
 
     print(
-        f"학습 후보에 없는 PlayStation Observed 게임: "
-        f"{unknown_count:,}건"
+        f"PlayStation observed interactions with games "
+        f"outside the training candidates: {unknown_count:,}"
     )
 
     return ps_matrix, ps_user_ids
 
 
 # ============================================================
-# 7. 평가 지표
+# 7. Evaluation metrics
 # ============================================================
 
 def evaluate_user(recommended_games, heldout_games, k=10):
@@ -314,7 +329,7 @@ def evaluate_user(recommended_games, heldout_games, k=10):
 
 
 # ============================================================
-# 8. 전체 ALS 평가
+# 8. Full ALS evaluation
 # ============================================================
 
 def evaluate_als(
@@ -327,7 +342,7 @@ def evaluate_als(
     model_name
 ):
     """
-    모든 PlayStation 사용자에게 Fold-in을 수행합니다.
+    Fold in and evaluate all PlayStation users.
     """
 
     num_users = len(ps_user_ids)
@@ -338,7 +353,7 @@ def evaluate_als(
     print(f"{model_name} - PlayStation Test")
     print("=" * 55)
 
-    print(f"평가 사용자 수: {num_users:,}명")
+    print(f"Evaluation users: {num_users:,}")
 
     for start in range(0, num_users, BATCH_SIZE):
 
@@ -353,14 +368,16 @@ def evaluate_als(
             end - start
         )
 
-        # Fold-in Top-10 추천
+        # Use Steam-trained game factors for PlayStation users. Fold-in
+        # recalculates their user factors using only overlapping observed games.
         item_indices, scores = model.recommend(
-            userid=local_user_ids,
-            user_items=batch_matrix,
-            N=TOP_K,
-            filter_already_liked_items=True,
-            recalculate_user=True
+            userid=local_user_ids,              # Batch-local CSR row indices
+            user_items=batch_matrix,            # PS observed-game confidence
+            N=TOP_K,                            # Number of games per PS user
+            filter_already_liked_items=True,   # Exclude observed games
+            recalculate_user=True              # Fold in unseen PS users
         )
+        # Parallel arrays: game-column indices and recommendation scores.
 
         for local_idx, user_id in enumerate(
             ps_user_ids[start:end]
@@ -374,19 +391,19 @@ def evaluate_als(
                 for item_idx in item_indices[local_idx]
             ]
 
-            # 추천 결과 검증
+            # Validate the recommendations.
             if not set(recommended_games).isdisjoint(
                 observed_games
             ):
                 raise ValueError(
-                    f"{user_id}: Observed 게임이 추천됨"
+                    f"{user_id}: an observed game was recommended"
                 )
 
             if len(recommended_games) != len(
                 set(recommended_games)
             ):
                 raise ValueError(
-                    f"{user_id}: 추천 게임 중복"
+                    f"{user_id}: duplicate recommendations"
                 )
 
             metrics = evaluate_user(
@@ -401,18 +418,18 @@ def evaluate_als(
             })
 
         print(
-            f"\r평가 진행: {end:,}/{num_users:,}명",
+            f"\rEvaluation progress: {end:,}/{num_users:,} users",
             end="",
             flush=True
         )
 
-    print("\n평가 완료")
+    print("\nEvaluation completed")
 
     return pd.DataFrame(results)
 
 
 # ============================================================
-# 9. Popularity 평가
+# 9. Popularity evaluation
 # ============================================================
 
 def evaluate_popularity(
@@ -422,8 +439,8 @@ def evaluate_popularity(
     heldout_by_user
 ):
     """
-    Steam Train의 게임별 소유자 수를 기준으로
-    Popularity Baseline을 평가합니다.
+    Evaluate the Popularity Baseline ranked by distinct owner counts
+    in Steam Train.
     """
 
     popularity = (
@@ -475,18 +492,18 @@ def evaluate_popularity(
         if idx % 1000 == 0 or idx == len(ps_user_ids):
 
             print(
-                f"\r평가 진행: {idx:,}/{len(ps_user_ids):,}명",
+                f"\rEvaluation progress: {idx:,}/{len(ps_user_ids):,} users",
                 end="",
                 flush=True
             )
 
-    print("\n평가 완료")
+    print("\nEvaluation completed")
 
     return pd.DataFrame(results)
 
 
 # ============================================================
-# 10. 결과 요약
+# 10. Results summary
 # ============================================================
 
 def summarize_results(results_df, model_name):
@@ -500,10 +517,10 @@ def summarize_results(results_df, model_name):
     ].mean()
 
     print("\n" + "=" * 55)
-    print(f"{model_name} 평가 결과")
+    print(f"{model_name} Evaluation Results")
     print("=" * 55)
 
-    print(f"평가 사용자 수: {len(results_df):,}명")
+    print(f"Evaluation users: {len(results_df):,}")
 
     print(
         f"Recall@10: "
@@ -530,7 +547,7 @@ def summarize_results(results_df, model_name):
 
 
 # ============================================================
-# 11. 메인 실행
+# 11. Main execution
 # ============================================================
 
 def main():
@@ -541,7 +558,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # 1. 데이터 불러오기
+    # 1. Load data.
     # --------------------------------------------------------
 
     train_df = pd.read_parquet(
@@ -570,7 +587,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # 2. 데이터 검증
+    # 2. Validate data.
     # --------------------------------------------------------
 
     validate_interactions(train_df, "Steam Train")
@@ -589,19 +606,19 @@ def main():
         or (train_df["playtime_forever"] < 0).any()
     ):
         raise ValueError(
-            "Steam Train에 잘못된 플레이타임이 존재합니다."
+            "Steam Train contains invalid playtime values."
         )
 
     print("=" * 55)
     print("Steam-to-PlayStation Final Evaluation")
     print("=" * 55)
 
-    print(f"Steam Train: {len(train_df):,}건")
-    print(f"PS Observed: {len(ps_observed):,}건")
-    print(f"PS Heldout: {len(ps_heldout):,}건")
+    print(f"Steam Train: {len(train_df):,} interactions")
+    print(f"PS Observed: {len(ps_observed):,} interactions")
+    print(f"PS Heldout: {len(ps_heldout):,} interactions")
 
     # --------------------------------------------------------
-    # 3. 사용자별 Observed / Heldout
+    # 3. Group observed and held-out games by user.
     # --------------------------------------------------------
 
     observed_by_user = (
@@ -618,7 +635,7 @@ def main():
 
     if set(observed_by_user) != set(heldout_by_user):
         raise ValueError(
-            "PS Observed와 Heldout 사용자 집합이 다릅니다."
+            "PS observed and held-out user sets do not match."
         )
 
     for user_id, observed_games in observed_by_user.items():
@@ -627,11 +644,11 @@ def main():
             heldout_by_user[user_id]
         ):
             raise ValueError(
-                f"{user_id}: Observed와 Heldout 중복"
+                f"{user_id}: overlapping observed and held-out games"
             )
 
     # --------------------------------------------------------
-    # 4. 학습 데이터 인덱싱
+    # 4. Index training data.
     # --------------------------------------------------------
 
     (
@@ -642,10 +659,10 @@ def main():
         matrix_shape
     ) = prepare_train_data(train_df)
 
-    print(f"\n학습 행렬 크기: {matrix_shape}")
+    print(f"\nTraining matrix shape: {matrix_shape}")
 
     # --------------------------------------------------------
-    # 5. PS Fold-in 행렬 생성
+    # 5. Build the PS fold-in matrix.
     # --------------------------------------------------------
 
     ps_matrix, ps_user_ids = build_ps_matrix(
@@ -655,7 +672,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # 6. Popularity Baseline 평가
+    # 6. Evaluate the Popularity Baseline.
     # --------------------------------------------------------
 
     popularity_results = evaluate_popularity(
@@ -673,7 +690,7 @@ def main():
     ]
 
     # --------------------------------------------------------
-    # 7. Binary ALS 학습 및 평가
+    # 7. Train and evaluate Binary ALS.
     # --------------------------------------------------------
 
     binary_matrix = build_train_matrix(
@@ -707,10 +724,10 @@ def main():
     )
 
     # --------------------------------------------------------
-    # 8. Weighted ALS 학습 및 평가
+    # 8. Train and evaluate Weighted ALS.
     # --------------------------------------------------------
 
-    # Train의 양수 플레이타임에서 상한값 계산
+    # Calculate the cap from positive training playtimes.
     positive_hours = (
         train_df.loc[
             train_df["playtime_forever"] > 0,
@@ -727,7 +744,7 @@ def main():
 
     print(
         f"\nWeighted ALS Playtime Cap: "
-        f"{cap_hours:.2f}시간"
+        f"{cap_hours:.2f} hours"
     )
 
     weighted_matrix = build_train_matrix(
@@ -762,13 +779,13 @@ def main():
     )
 
     # --------------------------------------------------------
-    # 9. 전체 결과 요약
+    # 9. Summarize all results.
     # --------------------------------------------------------
 
     summary_df = pd.DataFrame(summary_rows)
 
     print("\n" + "=" * 55)
-    print("PlayStation Test - 최종 모델 비교")
+    print("PlayStation Test - Final Model Comparison")
     print("=" * 55)
 
     display_df = summary_df.copy()
@@ -788,7 +805,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # 10. 결과 저장
+    # 10. Save results.
     # --------------------------------------------------------
 
     summary_df.to_csv(
@@ -797,7 +814,7 @@ def main():
         encoding="utf-8-sig"
     )
 
-    print(f"\n결과 저장 완료: {RESULT_PATH}")
+    print(f"\nResults saved to: {RESULT_PATH}")
 
 
 if __name__ == "__main__":

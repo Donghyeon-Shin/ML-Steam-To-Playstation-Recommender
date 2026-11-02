@@ -1,7 +1,7 @@
 
 import os
 
-# OpenBLAS 스레드 설정
+# Limit OpenBLAS to one thread.
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 
 from pathlib import Path
@@ -15,7 +15,7 @@ from implicit.cpu.als import AlternatingLeastSquares
 
 
 # ============================================================
-# 1. 설정
+# 1. Configuration
 # ============================================================
 
 PROJECT_DIR = Path(__file__).resolve().parents[2]
@@ -29,21 +29,21 @@ REGULARIZATION = 5.0
 ITERATIONS = 40
 RANDOM_STATE = 42
 
-# Confidence 설정
+# Confidence parameters
 OWNER_ALPHA = 2
 PLAYTIME_BETA = 0.1
 
-# 플레이타임 상한값: Train의 양수 플레이타임 75% 분위수
+# Playtime cap: 75th percentile of positive training playtimes.
 PLAYTIME_PERCENTILE = 0.75
 
 
 # ============================================================
-# 2. 데이터 검증
+# 2. Data validation
 # ============================================================
 
 def validate_interactions(df, name):
     """
-    사용자-게임 관계의 결측값과 중복을 검사합니다.
+    Check user-game interactions for missing values and duplicates.
     """
 
     required = {"user_id", "unified_game_id"}
@@ -52,30 +52,30 @@ def validate_interactions(df, name):
 
     if missing:
         raise ValueError(
-            f"{name}: 필수 컬럼 누락 {missing}"
+            f"{name}: missing required columns {missing}"
         )
 
     if df[["user_id", "unified_game_id"]].isna().any().any():
         raise ValueError(
-            f"{name}: 사용자 또는 게임 ID 결측값"
+            f"{name}: missing user or game IDs"
         )
 
     if df.duplicated(
         ["user_id", "unified_game_id"]
     ).any():
         raise ValueError(
-            f"{name}: 사용자-게임 중복 기록"
+            f"{name}: duplicate user-game interactions"
         )
 
 
 def validate_train_playtime(train_df):
     """
-    Train 데이터의 플레이타임을 검증합니다.
+    Validate playtime values in the training data.
     """
 
     if "playtime_forever" not in train_df.columns:
         raise ValueError(
-            "Steam Train에 playtime_forever 컬럼이 없습니다."
+            "Steam Train is missing the playtime_forever column."
         )
 
     train_df = train_df.copy()
@@ -89,27 +89,26 @@ def validate_train_playtime(train_df):
 
     if not np.isfinite(values).all():
         raise ValueError(
-            "Steam Train에 유효하지 않은 플레이타임이 있습니다."
+            "Steam Train contains invalid playtime values."
         )
 
     if (values < 0).any():
         raise ValueError(
-            "Steam Train에 음수 플레이타임이 있습니다."
+            "Steam Train contains negative playtime values."
         )
 
     return train_df
 
 
 # ============================================================
-# 3. 플레이타임 상한값 계산
+# 3. Playtime cap calculation
 # ============================================================
 
 def calculate_playtime_cap(train_df):
     """
-    Steam Train에서 양수 플레이타임의
-    99% 분위수를 계산합니다.
+    Calculate the configured percentile of positive Steam Train playtimes.
 
-    Validation 및 Test 데이터는 사용하지 않습니다.
+    Validation and test data are excluded.
     """
 
     positive_minutes = train_df.loc[
@@ -119,10 +118,10 @@ def calculate_playtime_cap(train_df):
 
     if positive_minutes.empty:
         raise ValueError(
-            "학습 데이터에 양수 플레이타임이 없습니다."
+            "The training data contain no positive playtime values."
         )
 
-    # 분 → 시간
+    # Convert minutes to hours.
     positive_hours = (
         positive_minutes.to_numpy(dtype=np.float64) / 60
     )
@@ -138,23 +137,23 @@ def calculate_playtime_cap(train_df):
 
 
 # ============================================================
-# 4. 플레이타임 기반 Confidence 계산
+# 4. Playtime-weighted confidence calculation
 # ============================================================
 
 def calculate_confidence(playtime_minutes, cap_hours):
     """
-    소유 게임의 Confidence를 계산합니다.
+    Compute confidence scores for owned games.
 
     c_ui = 1 + OWNER_ALPHA
            + PLAYTIME_BETA * log(1 + min(t_ui, T))
 
-    t_ui: 시간 단위 플레이타임
-    T: Train에서 계산한 플레이타임 상한값
+    t_ui: playtime measured in hours
+    T: playtime cap calculated from the training data
 
-    플레이타임이 0분이어도 소유 정보는 유지합니다.
+    Ownership confidence is retained even when playtime is zero.
     """
 
-    # 분 → 시간
+    # Convert minutes to hours.
     playtime_hours = (
         np.asarray(
             playtime_minutes,
@@ -162,16 +161,16 @@ def calculate_confidence(playtime_minutes, cap_hours):
         ) / 60
     )
 
-    # 상한값 적용
+    # Cap the playtime values.
     clipped_hours = np.minimum(
         playtime_hours,
         cap_hours
     )
 
-    # 로그 변환
+    # Apply a logarithmic transform.
     playtime_weight = np.log1p(clipped_hours)
 
-    # 최종 Confidence
+    # Compute final confidence scores.
     confidence = (
         1
         + OWNER_ALPHA
@@ -182,35 +181,41 @@ def calculate_confidence(playtime_minutes, cap_hours):
 
 
 # ============================================================
-# 5. Steam Train 행렬 생성
+# 5. Steam training matrix construction
 # ============================================================
 
 def build_train_matrix(train_df, cap_hours):
     """
-    Steam Train 데이터를 사용자 × 게임 CSR 행렬로 변환합니다.
+    Convert Steam training interactions into a user-by-game CSR matrix.
 
-    소유 게임에는 플레이타임 기반 Confidence를 부여합니다.
+    Weight owned games by their playtime-based confidence.
     """
 
-    # 사용자 인덱싱
+    # factorize() returns (codes, uniques): user_indices are consecutive row
+    # positions, while user_ids stores their original IDs for reverse lookup.
+    # sort=True sorts distinct IDs and updates the codes consistently.
     user_indices, user_ids = pd.factorize(
         train_df["user_id"],
         sort=True
     )
 
-    # 게임 인덱싱
+    # Encode games as matrix column positions in the same way.
+    # game_ids stores the original ID corresponding to each column.
     game_indices, game_ids = pd.factorize(
         train_df["unified_game_id"],
         sort=True
     )
 
-    # 플레이타임 기반 Confidence
+    # Compute playtime-based confidence.
     confidence = calculate_confidence(
         train_df["playtime_forever"].to_numpy(),
         cap_hours
     )
 
-    # CSR 행렬 생성
+    # CSR stores nonzero user-game interactions without allocating a dense
+    # matrix. confidence[i] goes to (user_indices[i], game_indices[i]).
+    # shape specifies user and game counts; dtype specifies stored precision.
+    # The values here include both ownership and playtime-based confidence.
     train_matrix = csr_matrix(
         (
             confidence,
@@ -223,7 +228,7 @@ def build_train_matrix(train_df, cap_hours):
         dtype=np.float32
     )
 
-    # 게임 ID → 행렬 인덱스
+    # Map game IDs to matrix column indices.
     game_to_idx = {
         game_id: idx
         for idx, game_id in enumerate(game_ids)
@@ -233,36 +238,41 @@ def build_train_matrix(train_df, cap_hours):
 
 
 # ============================================================
-# 6. Weighted ALS 학습
+# 6. Weighted ALS training
 # ============================================================
 
 def train_als(train_matrix):
     """
-    Playtime Weighted ALS 모델을 학습합니다.
+    Train the Playtime Weighted ALS model.
     """
 
+    # Implicit ALS learns latent user/game factors from confidence-weighted
+    # interactions, alternating the optimization of each factor matrix.
+    # API: https://benfred.github.io/implicit/api/models/cpu/als.html
     model = AlternatingLeastSquares(
-        factors=FACTORS,
-        regularization=REGULARIZATION,
-        iterations=ITERATIONS,
-        alpha=1.0,
-        random_state=RANDOM_STATE,
-        dtype=np.float32
+        factors=FACTORS,                # Dimensions of each latent vector
+        regularization=REGULARIZATION,  # L2 penalty to limit overfitting
+        iterations=ITERATIONS,          # Number of ALS optimization passes
+        alpha=1.0,                     # Keep precomputed confidence unchanged
+        random_state=RANDOM_STATE,     # Seed for factor initialization
+        dtype=np.float32               # Use 32-bit latent factors
     )
 
-    print("\nWeighted ALS 학습 시작")
+    print("\nStarting Weighted ALS training")
 
+    # fit() factorizes the user-by-game CSR matrix. Each nonzero entry stores
+    # confidence for an owned game; missing entries use baseline confidence 1.
     model.fit(train_matrix)
 
-    print("Weighted ALS 학습 완료")
+    print("Weighted ALS training completed")
 
     print(
-        f"사용자 잠재벡터: "
+        f"User factors: "
         f"{model.user_factors.shape}"
     )
 
     print(
-        f"게임 잠재벡터: "
+        f"Game factors: "
         f"{model.item_factors.shape}"
     )
 
@@ -270,7 +280,7 @@ def train_als(train_matrix):
 
 
 # ============================================================
-# 7. Steam Validation 행렬 생성
+# 7. Steam validation matrix construction
 # ============================================================
 
 def build_validation_matrix(
@@ -279,30 +289,32 @@ def build_validation_matrix(
     game_to_idx
 ):
     """
-    Steam Validation 사용자의 Fold-in 행렬을 생성합니다.
+    Build the fold-in matrix for Steam validation users.
 
-    평가 단계에서는 플레이타임을 사용하지 않습니다.
+    Playtime is not used during evaluation.
 
-    관측된 소유 게임:
+    Observed owned games:
         confidence = 1 + OWNER_ALPHA
 
-    관측되지 않은 게임:
-        행렬에 저장하지 않음
+    Unobserved games:
+        Not stored in the sparse matrix.
     """
 
-    # Validation 사용자 인덱싱
+    # factorize() maps each observed validation user ID to a consecutive row
+    # code; val_user_ids stores the sorted original IDs (sort=True).
+    # This row order is also used for batched fold-in evaluation.
     user_indices, val_user_ids = pd.factorize(
         val_observed["user_id"],
         sort=True
     )
 
-    # 학습 게임 인덱스로 변환
+    # Map games to their training-set indices.
     mapped_game_indices = (
         val_observed["unified_game_id"]
         .map(game_to_idx)
     )
 
-    # 학습 후보에 존재하는 게임만 사용
+    # Keep only games present in the training candidates.
     known_mask = mapped_game_indices.notna().to_numpy()
 
     known_user_indices = user_indices[known_mask]
@@ -319,7 +331,10 @@ def build_validation_matrix(
         dtype=np.float32
     )
 
-    # Validation 사용자 × 게임 행렬
+    # Construct a CSR matrix whose rows are validation users and whose
+    # columns match the training games. The coordinate arrays select only
+    # known user-game interactions; confidence supplies their binary weights.
+    # shape retains all validation users and game columns, including zeros.
     val_matrix = csr_matrix(
         (
             confidence,
@@ -338,20 +353,20 @@ def build_validation_matrix(
     unknown_count = (~known_mask).sum()
 
     print(
-        f"\nValidation Observed 중 "
-        f"학습 후보에 없는 게임 기록: {unknown_count:,}건"
+        f"\nValidation observed interactions with games "
+        f"outside the training candidates: {unknown_count:,}"
     )
 
     return val_matrix, val_user_ids
 
 
 # ============================================================
-# 8. 사용자별 평가
+# 8. Per-user evaluation
 # ============================================================
 
 def evaluate_user(recommended_games, heldout_games, k=10):
     """
-    사용자 한 명의 Top-K 추천 성능을 평가합니다.
+    Evaluate top-k recommendation quality for one user.
 
     Recall@K
     NDCG@K
@@ -360,7 +375,7 @@ def evaluate_user(recommended_games, heldout_games, k=10):
 
     recommended_games = recommended_games[:k]
 
-    # 추천 게임별 정답 여부
+    # Mark held-out hits among recommended games.
     hits = [
         1 if game_id in heldout_games else 0
         for game_id in recommended_games
@@ -402,7 +417,7 @@ def evaluate_user(recommended_games, heldout_games, k=10):
 
 
 # ============================================================
-# 9. 전체 Steam Validation 평가
+# 9. Full Steam validation evaluation
 # ============================================================
 
 def evaluate_all_users(
@@ -416,28 +431,27 @@ def evaluate_all_users(
     batch_size=256
 ):
     """
-    모든 Validation 사용자에게 Fold-in을 적용하고
-    Top-K 추천 성능을 평가합니다.
+    Fold in all validation users and evaluate top-k recommendations.
     """
 
-    # 사용자별 Observed 게임 집합
+    # Group observed games by user.
     observed_by_user = (
         val_observed.groupby("user_id")["unified_game_id"]
         .agg(set)
         .to_dict()
     )
 
-    # 사용자별 Heldout 게임 집합
+    # Group held-out games by user.
     heldout_by_user = (
         val_heldout.groupby("user_id")["unified_game_id"]
         .agg(set)
         .to_dict()
     )
 
-    # 사용자 집합 검사
+    # Verify that both splits contain the same users.
     if set(observed_by_user) != set(heldout_by_user):
         raise ValueError(
-            "Observed와 Heldout의 사용자 집합이 다릅니다."
+            "Observed and held-out user sets do not match."
         )
 
     num_users = len(val_user_ids)
@@ -448,10 +462,10 @@ def evaluate_all_users(
     print("Playtime Weighted ALS - Steam Validation")
     print("=" * 55)
 
-    print(f"평가 사용자 수: {num_users:,}명")
-    print(f"배치 크기: {batch_size}")
+    print(f"Evaluation users: {num_users:,}")
+    print(f"Batch size: {batch_size}")
 
-    # 배치 단위 추천 및 평가
+    # Recommend and evaluate in batches.
     for start in range(0, num_users, batch_size):
 
         end = min(
@@ -459,24 +473,27 @@ def evaluate_all_users(
             num_users
         )
 
-        # 배치 사용자 행렬
+        # Slice the batch user matrix.
         batch_matrix = val_matrix[start:end]
 
-        # 배치 내부 사용자 인덱스
+        # Use local indices within the batch.
         local_user_ids = np.arange(
             end - start
         )
 
-        # Fold-in 추천
+        # Fold in validation users using Steam-trained game factors.
+        # recalculate_user=True derives each new user's latent factors from
+        # observed ownership, without requiring the user in the training set.
         item_indices, scores = model.recommend(
-            userid=local_user_ids,
-            user_items=batch_matrix,
-            N=k,
-            filter_already_liked_items=True,
-            recalculate_user=True
+            userid=local_user_ids,              # Batch-local CSR row indices
+            user_items=batch_matrix,            # Observed ownership CSR
+            N=k,                                # Number of games per user
+            filter_already_liked_items=True,   # Exclude observed games
+            recalculate_user=True              # Recompute new user factors
         )
+        # item_indices and scores contain aligned rankings for each batch row.
 
-        # 사용자별 평가
+        # Evaluate each user.
         for local_idx, user_id in enumerate(
             val_user_ids[start:end]
         ):
@@ -484,35 +501,35 @@ def evaluate_all_users(
             observed_games = observed_by_user[user_id]
             heldout_games = heldout_by_user[user_id]
 
-            # 추천 결과를 실제 게임 ID로 변환
+            # Convert recommendation indices to game IDs.
             recommended_games = [
                 game_ids[int(item_idx)]
                 for item_idx in item_indices[local_idx]
             ]
 
-            # Observed / Heldout 중복 검사
+            # Check for observed/held-out overlap.
             if not observed_games.isdisjoint(heldout_games):
                 raise ValueError(
-                    f"사용자 {user_id}: Observed/Heldout 중복"
+                    f"User {user_id}: overlapping observed and held-out games"
                 )
 
-            # Observed 게임 추천 여부 검사
+            # Ensure observed games were not recommended.
             if not set(recommended_games).isdisjoint(
                 observed_games
             ):
                 raise ValueError(
-                    f"사용자 {user_id}: Observed 게임이 추천됨"
+                    f"User {user_id}: an observed game was recommended"
                 )
 
-            # 추천 게임 중복 검사
+            # Check for duplicate recommendations.
             if len(recommended_games) != len(
                 set(recommended_games)
             ):
                 raise ValueError(
-                    f"사용자 {user_id}: 추천 게임 중복"
+                    f"User {user_id}: duplicate recommendations"
                 )
 
-            # 평가
+            # Evaluate recommendations.
             metrics = evaluate_user(
                 recommended_games,
                 heldout_games,
@@ -524,26 +541,26 @@ def evaluate_all_users(
                 **metrics
             })
 
-        # 평가 진행 상황
+        # Display evaluation progress.
         print(
-            f"\r평가 진행: {end:,}/{num_users:,}명",
+            f"\rEvaluation progress: {end:,}/{num_users:,} users",
             end="",
             flush=True
         )
 
-    print("\n전체 사용자 평가 완료")
+    print("\nFull user evaluation completed")
 
     return pd.DataFrame(results)
 
 
 # ============================================================
-# 10. 메인 실행
+# 10. Main execution
 # ============================================================
 
 def main():
 
     # --------------------------------------------------------
-    # 1. 데이터 불러오기
+    # 1. Load data.
     # --------------------------------------------------------
 
     train_df = pd.read_parquet(
@@ -555,7 +572,7 @@ def main():
         ]
     )
 
-    # Validation에는 소유 정보만 존재합니다.
+    # Validation data contain ownership information only.
     val_observed = pd.read_parquet(
         DATA_DIR / "steam_val_observed.parquet",
         columns=[
@@ -573,7 +590,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # 2. 데이터 검증
+    # 2. Validate data.
     # --------------------------------------------------------
 
     validate_interactions(
@@ -591,24 +608,24 @@ def main():
         "Steam Validation Heldout"
     )
 
-    # Train 플레이타임만 검증
+    # Validate playtime in training data only.
     train_df = validate_train_playtime(train_df)
 
     print("=" * 55)
     print("Playtime Weighted ALS")
     print("=" * 55)
 
-    print(f"학습 데이터: {len(train_df):,}건")
-    print(f"Validation Observed: {len(val_observed):,}건")
-    print(f"Validation Heldout: {len(val_heldout):,}건")
+    print(f"Training interactions: {len(train_df):,}")
+    print(f"Validation observed: {len(val_observed):,}")
+    print(f"Validation held-out: {len(val_heldout):,}")
 
     # --------------------------------------------------------
-    # 3. 플레이타임 상한값 계산
+    # 3. Calculate the playtime cap.
     # --------------------------------------------------------
 
     cap_hours = calculate_playtime_cap(train_df)
 
-    print("\n모델 설정")
+    print("\nModel configuration")
 
     print(f"Factors: {FACTORS}")
     print(f"Regularization: {REGULARIZATION}")
@@ -617,12 +634,12 @@ def main():
     print(f"Playtime Beta: {PLAYTIME_BETA}")
 
     print(
-        f"플레이타임 상한: "
-        f"{cap_hours:.2f}시간"
+        f"Playtime cap: "
+        f"{cap_hours:.2f} hours"
     )
 
     # --------------------------------------------------------
-    # 4. 학습 행렬 생성
+    # 4. Build the training matrix.
     # --------------------------------------------------------
 
     train_matrix, game_ids, game_to_idx = (
@@ -633,20 +650,20 @@ def main():
     )
 
     print(
-        f"\n학습 행렬 크기: "
+        f"\nTraining matrix shape: "
         f"{train_matrix.shape}"
     )
 
-    print(f"추천 후보 게임: {len(game_ids):,}개")
+    print(f"Candidate games: {len(game_ids):,}")
 
     # --------------------------------------------------------
-    # 5. Weighted ALS 학습
+    # 5. Train Weighted ALS.
     # --------------------------------------------------------
 
     model = train_als(train_matrix)
 
     # --------------------------------------------------------
-    # 6. Validation Fold-in 행렬 생성
+    # 6. Build the validation fold-in matrix.
     # --------------------------------------------------------
 
     val_matrix, val_user_ids = build_validation_matrix(
@@ -656,7 +673,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # 7. 전체 Steam Validation 평가
+    # 7. Evaluate on the full Steam validation split.
     # --------------------------------------------------------
 
     results_df = evaluate_all_users(
@@ -671,7 +688,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # 8. 평균 평가 지표 계산
+    # 8. Average the evaluation metrics.
     # --------------------------------------------------------
 
     mean_metrics = results_df[
@@ -683,14 +700,14 @@ def main():
     ].mean()
 
     # --------------------------------------------------------
-    # 9. 결과 출력
+    # 9. Display results.
     # --------------------------------------------------------
 
     print("\n" + "=" * 55)
-    print("Playtime Weighted ALS - Steam Validation 결과")
+    print("Playtime Weighted ALS - Steam Validation Results")
     print("=" * 55)
 
-    print(f"평가 사용자 수: {len(results_df):,}명")
+    print(f"Evaluation users: {len(results_df):,}")
 
     print(
         f"\nRecall@10: "
@@ -707,7 +724,7 @@ def main():
         f"{mean_metrics['hit_at_10']:.4f}"
     )
 
-    print("\n백분율 기준")
+    print("\nPercentage values")
 
     print(
         f"Recall@10: "

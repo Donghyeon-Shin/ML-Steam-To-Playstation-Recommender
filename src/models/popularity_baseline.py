@@ -9,7 +9,7 @@ TOP_K = 10
 
 
 def calculate_popularity(train_df):
-    """Steam 게임별 소유 사용자 수를 기준으로 인기도 순위를 계산합니다."""
+    """Rank Steam games by distinct owner count, breaking ties by game ID."""
 
     popularity = (
         train_df.groupby("unified_game_id")["user_id"]
@@ -25,7 +25,7 @@ def calculate_popularity(train_df):
 
 
 def recommend_games(popularity, observed_games, k=10):
-    """이미 소유한 게임을 제외하고 인기 게임 상위 K개를 추천합니다."""
+    """Recommend the top-k popular games not owned by the user."""
 
     recommendations = []
 
@@ -40,20 +40,20 @@ def recommend_games(popularity, observed_games, k=10):
 
 
 def evaluate_user(recommendations, heldout_games, k=10):
-    """사용자 한 명의 Recall@K, NDCG@K, Hit@K를 계산합니다."""
+    """Compute Recall@K, NDCG@K, and Hit@K for one user."""
 
     hits = [
         int(game_id in heldout_games)
         for game_id in recommendations[:k]
     ]
 
-    # Recall@K
+    # Recall@K: fraction of held-out games retrieved.
     recall = sum(hits) / len(heldout_games)
 
-    # Hit@K
+    # Hit@K: whether any held-out game was retrieved.
     hit = float(any(hits))
 
-    # NDCG@K
+    # NDCG@K: discounted gains normalized by the ideal ranking.
     dcg = sum(
         relevance / math.log2(rank + 2)
         for rank, relevance in enumerate(hits)
@@ -70,7 +70,7 @@ def evaluate_user(recommendations, heldout_games, k=10):
 
 
 def evaluate_all_users(popularity, observed_df, heldout_df, k=10):
-    """전체 평가 사용자의 지표를 계산하고 평균을 반환합니다."""
+    """Evaluate all users and return macro-averaged ranking metrics."""
 
     observed_by_user = (
         observed_df.groupby("user_id")["unified_game_id"]
@@ -85,7 +85,7 @@ def evaluate_all_users(popularity, observed_df, heldout_df, k=10):
     )
 
     if set(observed_by_user) != set(heldout_by_user):
-        raise ValueError("Observed와 Heldout의 사용자 집합이 다릅니다.")
+        raise ValueError("Observed and held-out user sets do not match.")
 
     total_recall = 0.0
     total_ndcg = 0.0
@@ -95,10 +95,12 @@ def evaluate_all_users(popularity, observed_df, heldout_df, k=10):
         heldout_games = heldout_by_user[user_id]
 
         if not heldout_games:
-            raise ValueError(f"사용자 {user_id}의 Heldout이 비어 있습니다.")
+            raise ValueError(f"User {user_id} has no held-out games.")
 
         if not observed_games.isdisjoint(heldout_games):
-            raise ValueError(f"사용자 {user_id}의 데이터가 중복됩니다.")
+            raise ValueError(
+                f"User {user_id} has overlapping observed and held-out games."
+            )
 
         recommendations = recommend_games(
             popularity, observed_games, k
@@ -123,13 +125,13 @@ def evaluate_all_users(popularity, observed_df, heldout_df, k=10):
 
 
 def main():
-    # Steam 학습 데이터
+    # Load Steam training interactions.
     train_df = pd.read_parquet(
         DATA_DIR / "steam_train.parquet",
         columns=["user_id", "unified_game_id"]
     )
 
-    # Steam 검증 데이터
+    # Load Steam validation interactions.
     val_observed = pd.read_parquet(
         DATA_DIR / "steam_val_observed.parquet"
     )
@@ -138,10 +140,10 @@ def main():
         DATA_DIR / "steam_val_heldout.parquet"
     )
 
-    # 인기도 모델 구성
+    # Build the popularity ranking.
     popularity = calculate_popularity(train_df)
 
-    # Steam Validation 평가
+    # Evaluate on the Steam validation split.
     results = evaluate_all_users(
         popularity,
         val_observed,
@@ -149,14 +151,14 @@ def main():
         k=TOP_K
     )
 
-    # 결과 출력
+    # Report evaluation results.
     print("=" * 50)
     print("Popularity Baseline - Steam Validation")
     print("=" * 50)
 
-    print(f"학습 사용자 수: {train_df['user_id'].nunique():,}명")
-    print(f"추천 후보 게임: {len(popularity):,}개")
-    print(f"평가 사용자 수: {results['n_users']:,}명")
+    print(f"Training users: {train_df['user_id'].nunique():,}")
+    print(f"Candidate games: {len(popularity):,}")
+    print(f"Evaluation users: {results['n_users']:,}")
 
     print(f"\nRecall@{TOP_K}: {results['recall'] * 100:.2f}%")
     print(f"NDCG@{TOP_K}: {results['ndcg'] * 100:.2f}%")

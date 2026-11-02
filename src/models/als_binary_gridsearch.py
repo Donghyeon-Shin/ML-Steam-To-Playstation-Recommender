@@ -1,7 +1,7 @@
 
 import os
 
-# OpenBLAS 스레드 설정
+# Limit OpenBLAS to one thread.
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 
 from pathlib import Path
@@ -22,7 +22,7 @@ from als_binary import (
 
 
 # ============================================================
-# 1. 설정
+# 1. Configuration
 # ============================================================
 
 PROJECT_DIR = Path(__file__).resolve().parents[2]
@@ -37,14 +37,14 @@ BATCH_SIZE = 256
 ITERATIONS = 40
 RANDOM_STATE = 42
 
-# 2차 Grid Search 탐색 범위
+# Second-round grid search parameters
 FACTOR_GRID = [24]
 REGULARIZATION_GRID = [5.0]
 ALPHA_GRID = [2]
 
 
 # ============================================================
-# 2. Validation 평가
+# 2. Validation evaluation
 # ============================================================
 
 def evaluate_model(
@@ -56,10 +56,10 @@ def evaluate_model(
     confidence_alpha
 ):
     """
-    전체 Steam Validation 사용자를 배치 단위로 평가합니다.
+    Evaluate all Steam validation users in batches.
 
-    신규 사용자의 Observed 게임으로 Fold-in을 수행하고,
-    Top-10 추천 결과를 평가합니다.
+    Fold in new users using their observed games and evaluate
+    top-10 recommendations.
     """
 
     user_ids = list(observed_by_user.keys())
@@ -72,7 +72,7 @@ def evaluate_model(
         "hit_at_10": 0.0
     }
 
-    # 배치 단위 처리
+    # Process users in batches.
     for start in range(0, num_users, BATCH_SIZE):
 
         batch_users = user_ids[start:start + BATCH_SIZE]
@@ -80,7 +80,7 @@ def evaluate_model(
         rows = []
         cols = []
 
-        # 배치 사용자 × 게임 행렬 생성
+        # Build the batch user-by-game matrix.
         for local_idx, user_id in enumerate(batch_users):
 
             observed_games = observed_by_user[user_id]
@@ -100,6 +100,10 @@ def evaluate_model(
             dtype=np.float32
         )
 
+        # CSR stores only observed games instead of a dense user-game array.
+        # confidence holds weights; rows are batch-local user positions and
+        # cols are the corresponding training-game column positions.
+        # shape defines all batch users and training-game candidates.
         batch_matrix = csr_matrix(
             (
                 confidence,
@@ -109,16 +113,18 @@ def evaluate_model(
             dtype=np.float32
         )
 
-        # Fold-in Top-10 추천
+        # Fold in validation users against the game factors learned on Steam.
+        # recalculate_user=True derives factors from each user's observed games.
         item_indices, scores = model.recommend(
-            userid=np.arange(len(batch_users)),
-            user_items=batch_matrix,
-            N=TOP_K,
-            filter_already_liked_items=True,
-            recalculate_user=True
+            userid=np.arange(len(batch_users)),  # Batch-local CSR row indices
+            user_items=batch_matrix,              # Observed-game confidence
+            N=TOP_K,                              # Games to return per user
+            filter_already_liked_items=True,     # Exclude observed games
+            recalculate_user=True                # Compute new user factors
         )
+        # Returns matching arrays of ranked game-column indices and scores.
 
-        # 사용자별 평가
+        # Evaluate each user.
         for row, user_id in enumerate(batch_users):
 
             observed_games = observed_by_user[user_id]
@@ -140,25 +146,25 @@ def evaluate_model(
                 for game_id, _ in recommendations
             }
 
-            # Observed / Heldout 중복 검사
+            # Check for observed/held-out overlap.
             if not observed_games.isdisjoint(heldout_games):
                 raise ValueError(
-                    f"사용자 {user_id}: Observed/Heldout 중복"
+                    f"User {user_id}: overlapping observed and held-out games"
                 )
 
-            # Observed 게임 추천 여부 검사
+            # Ensure observed games were not recommended.
             if not recommended_games.isdisjoint(observed_games):
                 raise ValueError(
-                    f"사용자 {user_id}: Observed 게임 추천"
+                    f"User {user_id}: an observed game was recommended"
                 )
 
-            # 추천 중복 검사
+            # Check for duplicate recommendations.
             if len(recommended_games) != len(recommendations):
                 raise ValueError(
-                    f"사용자 {user_id}: 추천 게임 중복"
+                    f"User {user_id}: duplicate recommendations"
                 )
 
-            # 평가
+            # Evaluate recommendations.
             metrics = evaluate_user(
                 recommendations,
                 heldout_games,
@@ -168,7 +174,7 @@ def evaluate_model(
             for metric_name in metric_sums:
                 metric_sums[metric_name] += metrics[metric_name]
 
-    # 사용자별 평가 지표의 평균
+    # Return the mean of per-user metrics.
     return {
         metric_name: total / num_users
         for metric_name, total in metric_sums.items()
@@ -176,13 +182,12 @@ def evaluate_model(
 
 
 # ============================================================
-# 3. 기존 실험 결과 불러오기
+# 3. Load existing experiment results
 # ============================================================
 
 def load_existing_results():
     """
-    기존 CSV 결과를 불러오고
-    이미 완료한 하이퍼파라미터 조합을 반환합니다.
+    Load saved CSV results and return completed hyperparameter combinations.
     """
 
     if not RESULT_PATH.exists():
@@ -221,10 +226,9 @@ def grid_search(
     game_to_idx
 ):
     """
-    Grid Search를 수행합니다.
+    Run the grid search.
 
-    기존 CSV에 존재하는 조합은 건너뛰고,
-    새로운 실험 결과만 CSV에 추가합니다.
+    Skip combinations already saved in the CSV, and append only new results.
     """
 
     RESULT_DIR.mkdir(
@@ -232,10 +236,10 @@ def grid_search(
         exist_ok=True
     )
 
-    # 기존 결과 확인
+    # Check existing results.
     existing_df, completed_params = load_existing_results()
 
-    # 전체 하이퍼파라미터 조합
+    # Generate all hyperparameter combinations.
     combinations = list(product(
         FACTOR_GRID,
         REGULARIZATION_GRID,
@@ -244,7 +248,7 @@ def grid_search(
 
     total_combinations = len(combinations)
 
-    # 아직 실행하지 않은 조합
+    # Filter out previously completed combinations.
     remaining_combinations = [
         params
         for params in combinations
@@ -260,16 +264,16 @@ def grid_search(
     print("Binary ALS Grid Search")
     print("=" * 60)
 
-    print(f"기존 실험 결과: {len(existing_df)}개")
-    print(f"현재 탐색 조합: {total_combinations}개")
-    print(f"새로 실행할 조합: {len(remaining_combinations)}개")
-    print(f"평가 사용자: {len(observed_by_user):,}명")
-    print(f"추천 개수: Top-{TOP_K}")
+    print(f"Existing experiments: {len(existing_df)}")
+    print(f"Search combinations: {total_combinations}")
+    print(f"Remaining combinations: {len(remaining_combinations)}")
+    print(f"Evaluation users: {len(observed_by_user):,}")
+    print(f"Recommendations: Top-{TOP_K}")
     print(f"Iterations: {ITERATIONS}")
 
     total_start_time = perf_counter()
 
-    # 새 실험만 수행
+    # Run only new experiments.
     for experiment_idx, (
         factors,
         regularization,
@@ -278,7 +282,7 @@ def grid_search(
 
         print("\n" + "-" * 60)
         print(
-            f"새 실험 {experiment_idx}/"
+            f"New experiment {experiment_idx}/"
             f"{len(remaining_combinations)}"
         )
         print("-" * 60)
@@ -290,7 +294,7 @@ def grid_search(
         start_time = perf_counter()
 
         # ----------------------------------------------------
-        # 1. Confidence 업데이트
+        # 1. Update confidence values.
         # ----------------------------------------------------
 
         train_matrix.data.fill(
@@ -298,25 +302,29 @@ def grid_search(
         )
 
         # ----------------------------------------------------
-        # 2. 모델 생성 및 학습
+        # 2. Create and train the model.
         # ----------------------------------------------------
 
+        # The implicit CPU ALS class learns user/game latent factor matrices.
+        # API: https://benfred.github.io/implicit/api/models/cpu/als.html
         model = AlternatingLeastSquares(
-            factors=factors,
-            regularization=regularization,
-            iterations=ITERATIONS,
-            alpha=1.0,
-            random_state=RANDOM_STATE,
-            dtype=np.float32
+            factors=factors,                # Number of latent dimensions
+            regularization=regularization,  # L2 penalty against overfitting
+            iterations=ITERATIONS,          # ALS optimization passes
+            alpha=1.0,                     # Preserve CSR confidence values
+            random_state=RANDOM_STATE,     # Seed factor initialization
+            dtype=np.float32               # Use 32-bit factor vectors
         )
 
+        # fit() factorizes the user-by-game confidence matrix; absent entries
+        # represent unobserved games. Hide progress for grid search trials.
         model.fit(
-            train_matrix,
-            show_progress=False
+            train_matrix,        # CSR with confidence for owned games
+            show_progress=False  # Suppress per-iteration progress bar
         )
 
         # ----------------------------------------------------
-        # 3. 전체 Validation 평가
+        # 3. Evaluate on the full validation split.
         # ----------------------------------------------------
 
         metrics = evaluate_model(
@@ -331,7 +339,7 @@ def grid_search(
         elapsed_seconds = perf_counter() - start_time
 
         # ----------------------------------------------------
-        # 4. 결과 기록
+        # 4. Record results.
         # ----------------------------------------------------
 
         result = {
@@ -360,10 +368,10 @@ def grid_search(
             f"{metrics['hit_at_10'] * 100:.2f}%"
         )
 
-        print(f"실행 시간: {elapsed_seconds:.2f}초")
+        print(f"Elapsed time: {elapsed_seconds:.2f} seconds")
 
         # ----------------------------------------------------
-        # 5. CSV에 새로운 결과만 추가
+        # 5. Append only new results to the CSV.
         # ----------------------------------------------------
 
         file_exists = (
@@ -379,7 +387,7 @@ def grid_search(
             encoding="utf-8"
         )
 
-        # 완료한 조합 기록
+        # Mark the combination as completed.
         completed_params.add((
             factors,
             regularization,
@@ -387,35 +395,35 @@ def grid_search(
             ITERATIONS
         ))
 
-        print("CSV 저장 완료")
+        print("CSV saved")
 
     total_elapsed = perf_counter() - total_start_time
 
     print("\n" + "=" * 60)
-    print("Grid Search 실행 완료")
+    print("Grid Search completed")
     print("=" * 60)
 
-    print(f"이번 실행 시간: {total_elapsed:.2f}초")
+    print(f"Current run time: {total_elapsed:.2f} seconds")
 
-    # 기존 + 신규 결과 모두 불러오기
+    # Reload both existing and newly added results.
     all_results = pd.read_csv(
         RESULT_PATH,
         encoding="utf-8-sig"
     )
 
-    print(f"누적 실험 결과: {len(all_results)}개")
+    print(f"Total accumulated experiments: {len(all_results)}")
 
     return all_results
 
 
 # ============================================================
-# 5. 최적 조합 출력
+# 5. Display the best hyperparameters
 # ============================================================
 
 def print_best_result(results_df):
     """
-    누적된 전체 실험 결과를 NDCG@10 기준으로 정렬하고
-    최적 하이퍼파라미터를 출력합니다.
+    Sort all accumulated results by NDCG@10 and display
+    the best hyperparameters.
     """
 
     sorted_results = (
@@ -433,10 +441,10 @@ def print_best_result(results_df):
     best = sorted_results.iloc[0]
 
     print("\n" + "=" * 60)
-    print("전체 Grid Search 최종 결과")
+    print("Final Grid Search Results")
     print("=" * 60)
 
-    print("\nNDCG@10 기준 상위 10개 조합")
+    print("\nTop 10 combinations by NDCG@10")
 
     top_results = sorted_results[
         [
@@ -449,7 +457,7 @@ def print_best_result(results_df):
         ]
     ].head(10).copy()
 
-    # 백분율 변환
+    # Convert metrics to percentages.
     for column in [
         "recall_at_10",
         "ndcg_at_10",
@@ -465,7 +473,7 @@ def print_best_result(results_df):
     )
 
     print("\n" + "=" * 60)
-    print("최적 하이퍼파라미터")
+    print("Best Hyperparameters")
     print("=" * 60)
 
     print(f"Factors: {int(best['factors'])}")
@@ -485,7 +493,7 @@ def print_best_result(results_df):
         f"{int(best['iterations'])}"
     )
 
-    print("\n최적 모델 평가 성능")
+    print("\nBest Model Evaluation Metrics")
 
     print(
         f"Recall@10: "
@@ -502,16 +510,16 @@ def print_best_result(results_df):
         f"{best['hit_at_10'] * 100:.2f}%"
     )
 
-    print(f"\n전체 결과 저장: {RESULT_PATH}")
+    print(f"\nFull results saved to: {RESULT_PATH}")
 
 
 # ============================================================
-# 6. 메인 실행
+# 6. Main execution
 # ============================================================
 
 def main():
 
-    # 1. 데이터 불러오기
+    # 1. Load data.
     train_df = pd.read_parquet(
         DATA_DIR / "steam_train.parquet",
         columns=["user_id", "unified_game_id"]
@@ -527,27 +535,27 @@ def main():
         columns=["user_id", "unified_game_id"]
     )
 
-    print("Steam 데이터 로드 완료")
-    print(f"학습 데이터: {len(train_df):,}건")
+    print("Steam data loaded")
+    print(f"Training interactions: {len(train_df):,}")
 
-    # 2. 학습 행렬 생성
+    # 2. Build the training matrix.
     train_matrix, game_ids, game_to_idx = (
         build_train_matrix(train_df)
     )
 
-    print(f"학습 행렬: {train_matrix.shape}")
+    print(f"Training matrix: {train_matrix.shape}")
 
-    # 3. Validation 사용자별 게임 목록 생성
+    # 3. Group validation games by user.
     observed_by_user = group_games_by_user(val_observed)
     heldout_by_user = group_games_by_user(val_heldout)
 
-    # 사용자 집합 검사
+    # Verify that both validation splits contain the same users.
     if set(observed_by_user) != set(heldout_by_user):
         raise ValueError(
-            "Observed와 Heldout의 사용자 집합이 다릅니다."
+            "Observed and held-out user sets do not match."
         )
 
-    # 4. Grid Search 수행
+    # 4. Run the grid search.
     results_df = grid_search(
         train_matrix,
         observed_by_user,
@@ -556,7 +564,7 @@ def main():
         game_to_idx
     )
 
-    # 5. 누적 결과에서 최적 모델 선정
+    # 5. Select the best model from accumulated results.
     print_best_result(results_df)
 
 
