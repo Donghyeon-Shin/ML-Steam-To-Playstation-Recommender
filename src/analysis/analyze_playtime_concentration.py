@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 
 # ============================================================
-# 1. 경로 및 설정
+# 1. Paths and configuration
 # ============================================================
 
 PROJECT_DIR = Path(__file__).resolve().parents[2]
@@ -24,7 +24,7 @@ CONCENTRATION_THRESHOLD = 0.8
 
 
 # ============================================================
-# 2. 데이터 불러오기
+# 2. Load data
 # ============================================================
 
 def load_data():
@@ -43,7 +43,7 @@ def load_data():
         errors="coerce"
     )
 
-    # 데이터 검증
+    # Validate playtime values and unique user-game interactions.
     if df["playtime_forever"].isna().any():
         raise ValueError("플레이타임 결측값이 존재합니다.")
 
@@ -66,27 +66,27 @@ def load_data():
 
 
 # ============================================================
-# 3. 사용자별 플레이타임 통계
+# 3. Per-user playtime statistics
 # ============================================================
 
 def calculate_user_statistics(df):
     """
-    사용자별로 다음 항목을 계산합니다.
+    Calculate the following statistics for each user.
 
     owned_games:
-        소유한 게임 수
+        Number of owned games.
 
     played_games:
-        플레이타임이 0보다 큰 게임 수
+        Number of games with positive playtime.
 
     total_minutes:
-        전체 누적 플레이타임
+        Total playtime across owned games, in minutes.
 
     max_minutes:
-        가장 많이 플레이한 게임의 플레이타임
+        Playtime of the most-played game, in minutes.
 
     top1_share:
-        전체 플레이타임 중 최다 플레이 게임의 비중
+        Share of total playtime spent on the most-played game.
     """
 
     df = df.copy()
@@ -118,7 +118,7 @@ def calculate_user_statistics(df):
         .reset_index()
     )
 
-    # 시간 단위로 변환
+    # Convert playtime from minutes to hours.
     user_stats["total_hours"] = (
         user_stats["total_minutes"] / 60
     )
@@ -127,7 +127,7 @@ def calculate_user_statistics(df):
         user_stats["max_minutes"] / 60
     )
 
-    # Top-1 플레이타임 집중도
+    # Calculate the most-played game's share of total playtime.
     user_stats["top1_share"] = np.where(
         user_stats["total_minutes"] > 0,
         (
@@ -141,7 +141,7 @@ def calculate_user_statistics(df):
 
 
 # ============================================================
-# 4. 전체 사용자 집중도 분석
+# 4. Overall user playtime concentration
 # ============================================================
 
 def analyze_overall(user_stats):
@@ -181,7 +181,7 @@ def analyze_overall(user_stats):
         f"({len(multi_game) / total_users * 100:.2f}%)"
     )
 
-    # 실제 플레이한 게임이 2개 이상인 사용자 분석
+    # Analyze users who played at least two games.
     print("\n실제 플레이한 게임 2개 이상 사용자 기준")
 
     if multi_game.empty:
@@ -215,13 +215,12 @@ def analyze_overall(user_stats):
 
 
 # ============================================================
-# 5. 장시간 플레이 사용자 집중도 분석
+# 5. Playtime concentration among heavy players
 # ============================================================
 
 def analyze_heavy_players(user_stats):
     """
-    최다 플레이 게임이 특정 시간 이상인 사용자들을
-    분석합니다.
+    Analyze users whose most-played game exceeds each hour threshold.
     """
 
     print("\n" + "=" * 60)
@@ -251,7 +250,7 @@ def analyze_heavy_players(user_stats):
 
         print(f"전체 사용자: {len(selected):,}명")
 
-        # 실제 플레이한 게임이 하나뿐인 사용자
+        # Users who played exactly one game.
         one_game = selected[
             selected["played_games"] == 1
         ]
@@ -261,7 +260,7 @@ def analyze_heavy_players(user_stats):
             f"({len(one_game) / len(selected) * 100:.2f}%)"
         )
 
-        # 실제 플레이한 게임이 2개 이상인 사용자
+        # Users who played at least two games.
         multi_game = selected[
             selected["played_games"] >= 2
         ]
@@ -302,7 +301,7 @@ def analyze_heavy_players(user_stats):
 
 
 # ============================================================
-# 6. 최다 플레이타임 구간별 집중도
+# 6. Concentration by maximum game playtime
 # ============================================================
 
 def analyze_by_max_playtime(user_stats):
@@ -311,7 +310,7 @@ def analyze_by_max_playtime(user_stats):
     print("3. 최다 플레이타임 구간별 집중도")
     print("=" * 60)
 
-    # 1개 게임만 플레이한 사용자는 제외
+    # Exclude users who played fewer than two games.
     multi_game = user_stats[
         user_stats["played_games"] >= 2
     ].copy()
@@ -343,13 +342,13 @@ def analyze_by_max_playtime(user_stats):
         labels=labels
     )
 
-    # 집중도 80% 이상 여부
+    # Flag users whose top-1 share is at least 80%.
     multi_game["high_concentration"] = (
         multi_game["top1_share"]
         >= CONCENTRATION_THRESHOLD
     )
 
-    # 구간별 통계
+    # Aggregate concentration statistics by maximum-playtime interval.
     summary = (
         multi_game.groupby(
             "max_time_bin",
@@ -376,7 +375,7 @@ def analyze_by_max_playtime(user_stats):
         .reset_index()
     )
 
-    # 백분율 변환
+    # Convert shares to percentages.
     summary["median_top1_share"] *= 100
     summary["high_concentration_rate"] *= 100
 
@@ -392,7 +391,7 @@ def analyze_by_max_playtime(user_stats):
         )
     )
 
-    # 결과 저장
+    # Save the interval summary.
     output_path = (
         RESULT_DIR
         / "playtime_concentration_summary.csv"
@@ -406,7 +405,7 @@ def analyze_by_max_playtime(user_stats):
 
     print(f"\n분석 결과 저장: {output_path}")
 
-    # 상관관계 계산
+    # Calculate the Spearman rank correlation.
     correlation = multi_game[
         ["max_hours", "top1_share"]
     ].corr(method="spearman").iloc[0, 1]
@@ -420,7 +419,7 @@ def analyze_by_max_playtime(user_stats):
 
 
 # ============================================================
-# 7. 사용자 집중도 분포 그래프
+# 7. Plot user playtime concentration
 # ============================================================
 
 def plot_concentration(user_stats):
@@ -441,7 +440,7 @@ def plot_concentration(user_stats):
 
     bins = np.linspace(0, 100, 51)
 
-    # 1개 이상 게임 플레이한 사용자
+    # Users who played at least one game.
     axes[0].hist(
         active_users["top1_share"] * 100,
         bins=bins,
@@ -455,7 +454,7 @@ def plot_concentration(user_stats):
     axes[0].set_xlabel("Top-1 Playtime Share (%)")
     axes[0].set_ylabel("Number of Users")
 
-    # 2개 이상 게임 플레이한 사용자
+    # Users who played at least two games.
     axes[1].hist(
         multi_game["top1_share"] * 100,
         bins=bins,
@@ -490,12 +489,12 @@ def plot_concentration(user_stats):
 
 
 # ============================================================
-# 8. 최대 플레이타임과 집중도의 관계
+# 8. Plot concentration by maximum playtime
 # ============================================================
 
 def plot_concentration_by_playtime(summary):
 
-    # 사용자가 존재하는 구간만 표시
+    # Display intervals containing at least one user.
     summary = summary[
         summary["users"] > 0
     ]
@@ -537,27 +536,27 @@ def plot_concentration_by_playtime(summary):
 
 
 # ============================================================
-# 9. 메인 실행
+# 9. Main execution
 # ============================================================
 
 def main():
 
-    # 1. 데이터 로드
+    # 1. Load data.
     df = load_data()
 
-    # 2. 사용자별 통계 계산
+    # 2. Calculate per-user statistics.
     user_stats = calculate_user_statistics(df)
 
-    # 3. 전체 사용자 집중도
+    # 3. Analyze overall concentration.
     analyze_overall(user_stats)
 
-    # 4. 장시간 플레이 사용자 분석
+    # 4. Analyze heavy players.
     analyze_heavy_players(user_stats)
 
-    # 5. 플레이타임 구간별 집중도
+    # 5. Analyze concentration by playtime interval.
     summary = analyze_by_max_playtime(user_stats)
 
-    # 6. 그래프 생성
+    # 6. Generate concentration plots.
     plot_concentration(user_stats)
 
     plot_concentration_by_playtime(summary)

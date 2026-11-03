@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 
 # ============================================================
-# 1. 경로 설정
+# 1. Path configuration
 # ============================================================
 
 PROJECT_DIR = Path(__file__).resolve().parents[2]
@@ -23,7 +23,7 @@ RESULT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ============================================================
-# 2. 플레이타임 데이터 불러오기
+# 2. Load playtime data
 # ============================================================
 
 def load_playtime():
@@ -46,7 +46,7 @@ def load_playtime():
     print(f"결측값: {playtime.isna().sum():,}건")
     print(f"음수: {(playtime < 0).sum():,}건")
 
-    # 결측값 및 잘못된 값 제외
+    # Exclude missing and invalid playtime values.
     playtime = playtime[
         playtime.notna() & (playtime >= 0)
     ]
@@ -55,7 +55,7 @@ def load_playtime():
 
 
 # ============================================================
-# 3. 기본 통계량
+# 3. Descriptive statistics
 # ============================================================
 
 def analyze_statistics(playtime):
@@ -97,7 +97,7 @@ def analyze_statistics(playtime):
     print(f"중앙값: {positive.median() / 60:.2f}시간")
     print(f"최댓값: {positive.max() / 60:.2f}시간")
 
-    # 분위수
+    # Calculate quantiles for games with positive playtime.
     percentiles = [
         0.25,
         0.50,
@@ -121,7 +121,7 @@ def analyze_statistics(playtime):
 
 
 # ============================================================
-# 4. 플레이타임 구간별 분포
+# 4. Playtime distribution by interval
 # ============================================================
 
 def analyze_intervals(playtime):
@@ -130,7 +130,7 @@ def analyze_intervals(playtime):
     print("2. 플레이타임 구간별 분포")
     print("=" * 55)
 
-    # 분 단위 구간
+    # Define interval boundaries in minutes.
     bins = [
         -np.inf,
         0,
@@ -177,7 +177,7 @@ def analyze_intervals(playtime):
 
 
 # ============================================================
-# 5. 구간별 분포 그래프
+# 5. Plot the playtime interval distribution
 # ============================================================
 
 def plot_intervals(percentages):
@@ -230,21 +230,21 @@ def plot_intervals(percentages):
 
 
 # ============================================================
-# 6. 로그 스케일 플레이타임 분포
+# 6. Plot the log-scale playtime distribution
 # ============================================================
 
 def plot_log_distribution(playtime):
 
-    # 0분 제외
+    # Exclude games with zero playtime.
     positive = playtime[playtime > 0]
 
     if positive.empty:
         return
 
-    # 분 → 시간
+    # Convert minutes to hours.
     playtime_hours = positive.to_numpy() / 60
 
-    # 로그 변환
+    # Apply a logarithmic transformation.
     log_playtime = np.log1p(playtime_hours)
 
     fig, ax = plt.subplots(figsize=(11, 6))
@@ -256,7 +256,7 @@ def plot_log_distribution(playtime):
         edgecolor="white"
     )
 
-    # 실제 시간 기준으로 X축 표시
+    # Label the x-axis using actual playtime in hours.
     hour_ticks = [
         0,
         0.5,
@@ -303,25 +303,25 @@ def plot_log_distribution(playtime):
 
 
 # ============================================================
-# 7. 메인 실행
+# 7. Main execution
 # ============================================================
 
 def main():
 
-    # 데이터 로드
+    # Load the playtime data.
     playtime = load_playtime()
 
     if playtime.empty:
         print("분석 가능한 데이터가 없습니다.")
         return
 
-    # 기본 통계
+    # Print descriptive statistics.
     analyze_statistics(playtime)
 
-    # 구간별 분포
+    # Calculate the interval distribution.
     percentages = analyze_intervals(playtime)
 
-    # 그래프 생성
+    # Generate distribution plots.
     plot_intervals(percentages)
 
     plot_log_distribution(playtime)
