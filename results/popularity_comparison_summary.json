@@ -1,0 +1,30 @@
+{
+  "steam_train_users": 63478,
+  "ps_test_users": 44743,
+  "compared_games": 4399,
+  "spearman_rank_correlation": 0.5757629467423038,
+  "spearman_p_value": 0.0,
+  "top_k_overlap": {
+    "10": {
+      "shared_games": 2,
+      "overlap_at_k": 0.2,
+      "jaccard": 0.1111111111111111
+    },
+    "20": {
+      "shared_games": 5,
+      "overlap_at_k": 0.25,
+      "jaccard": 0.14285714285714285
+    },
+    "50": {
+      "shared_games": 14,
+      "overlap_at_k": 0.28,
+      "jaccard": 0.16279069767441862
+    },
+    "100": {
+      "shared_games": 37,
+      "overlap_at_k": 0.37,
+      "jaccard": 0.22699386503067484
+    }
+  },
+  "important_note": "PS popularity uses observed + held-out only for POST-HOC diagnosis. Do not use PS ranking to train, tune or rerank a recommender."
+}
