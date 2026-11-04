@@ -432,35 +432,59 @@ def evaluate_als(
 # 9. Popularity evaluation
 # ============================================================
 
-def evaluate_popularity(
-    train_df,
-    ps_user_ids,
-    observed_by_user,
-    heldout_by_user
-):
+def rank_games_by_popularity(interactions_df, candidate_game_ids):
     """
-    Evaluate the Popularity Baseline ranked by distinct owner counts
-    in Steam Train.
+    Rank the same Steam candidate catalog by distinct owner counts.
+
+    Games absent from the popularity source receive zero owners and remain
+    available as candidates. Ties are broken by unified game ID.
     """
 
-    popularity = (
-        train_df.groupby("unified_game_id")["user_id"]
+    owner_counts = (
+        interactions_df.groupby("unified_game_id")["user_id"]
         .nunique()
         .reset_index(name="owner_count")
+    )
+
+    popularity = (
+        pd.DataFrame({"unified_game_id": candidate_game_ids})
+        .merge(owner_counts, on="unified_game_id", how="left")
+        .fillna({"owner_count": 0})
         .sort_values(
             by=["owner_count", "unified_game_id"],
             ascending=[False, True]
         )
     )
 
-    ranked_games = popularity[
-        "unified_game_id"
-    ].tolist()
+    return popularity["unified_game_id"].tolist()
+
+
+def evaluate_popularity(
+    popularity_source,
+    candidate_game_ids,
+    ps_user_ids,
+    observed_by_user,
+    heldout_by_user,
+    model_name
+):
+    """
+    Evaluate popularity-based recommendations on the same PS held-out split.
+
+    Steam Popularity uses Steam Train ownership. PS Popularity uses only
+    ps_test_observed: this is a target-adapted (transductive) baseline,
+    not a strictly zero-shot baseline. PS held-out interactions are never
+    used to calculate popularity.
+    """
+
+    ranked_games = rank_games_by_popularity(
+        popularity_source,
+        candidate_game_ids
+    )
 
     results = []
 
     print("\n" + "=" * 55)
-    print("Popularity Baseline - PlayStation Test")
+    print(f"{model_name} - PlayStation Test")
     print("=" * 55)
 
     for idx, user_id in enumerate(ps_user_ids, start=1):
@@ -672,22 +696,41 @@ def main():
     )
 
     # --------------------------------------------------------
-    # 6. Evaluate the Popularity Baseline.
+    # 6. Evaluate both source-domain and target-adapted popularity.
     # --------------------------------------------------------
 
-    popularity_results = evaluate_popularity(
+    steam_popularity_results = evaluate_popularity(
         train_df,
+        game_ids,
         ps_user_ids,
         observed_by_user,
-        heldout_by_user
+        heldout_by_user,
+        "Steam Popularity"
     )
 
     summary_rows = [
         summarize_results(
-            popularity_results,
-            "Popularity"
+            steam_popularity_results,
+            "Steam Popularity"
         )
     ]
+
+    # Use PS observed interactions only, never PS held-out ownership.
+    ps_popularity_results = evaluate_popularity(
+        ps_observed,
+        game_ids,
+        ps_user_ids,
+        observed_by_user,
+        heldout_by_user,
+        "PS Popularity (Observed)"
+    )
+
+    summary_rows.append(
+        summarize_results(
+            ps_popularity_results,
+            "PS Popularity (Observed)"
+        )
+    )
 
     # --------------------------------------------------------
     # 7. Train and evaluate Binary ALS.
