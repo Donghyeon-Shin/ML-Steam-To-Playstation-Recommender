@@ -26,5 +26,19 @@
       "jaccard": 0.22699386503067484
     }
   },
+  "steam_top_k_spearman": {
+    "20": {
+      "spearman_rank_correlation": 0.5037593984962406,
+      "spearman_p_value": 0.023538039221168122
+    },
+    "50": {
+      "spearman_rank_correlation": 0.2921008403361345,
+      "spearman_p_value": 0.039556328070587954
+    },
+    "100": {
+      "spearman_rank_correlation": 0.27251125112511243,
+      "spearman_p_value": 0.0060886419608029065
+    }
+  },
   "important_note": "PS popularity uses observed + held-out only for POST-HOC diagnosis. Do not use PS ranking to train, tune or rerank a recommender."
 }

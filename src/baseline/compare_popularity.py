@@ -80,6 +80,7 @@ def main() -> None:
     for k in (10, 20, 50, 100):
         a = set(steam_order['unified_game_id'].head(k))
         b = set(ps_order['unified_game_id'].head(k))
+
         intersection = len(a & b)
         tops[str(k)] = {
             'shared_games': intersection,
@@ -87,7 +88,27 @@ def main() -> None:
             'jaccard': intersection / len(a | b),
         }
 
-    rho, pvalue = spearmanr(result['steam_users'], result['ps_users']) # Spearman's rank correlation coefficient and p-value
+    # Calculate Spearman correlation for all games
+    rho, pvalue = spearmanr(
+        result['steam_users'],
+        result['ps_users']
+    )
+
+    # Calculate Spearman correlation for Steam Top-K games
+    top_k_spearman = {}
+    for k in (20, 50, 100):
+        top_k = result.nsmallest(k, 'steam_rank')
+
+        top_rho, top_pvalue = spearmanr(
+            top_k['steam_users'],
+            top_k['ps_users']
+        )
+
+        top_k_spearman[str(k)] = {
+            'spearman_rank_correlation': float(top_rho),
+            'spearman_p_value': float(top_pvalue),
+        }
+
     summary = {
         'steam_train_users': int(steam_n),
         'ps_test_users': int(ps_n),
@@ -95,6 +116,7 @@ def main() -> None:
         'spearman_rank_correlation': float(rho),
         'spearman_p_value': float(pvalue),
         'top_k_overlap': tops,
+        'steam_top_k_spearman': top_k_spearman,
         'important_note': (
             'PS popularity uses observed + held-out only for POST-HOC diagnosis. '
             'Do not use PS ranking to train, tune or rerank a recommender.'
