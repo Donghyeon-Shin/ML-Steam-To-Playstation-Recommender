@@ -45,22 +45,22 @@ def load_data():
 
     # Validate playtime values and unique user-game interactions.
     if df["playtime_forever"].isna().any():
-        raise ValueError("플레이타임 결측값이 존재합니다.")
+        raise ValueError("Missing playtime values were found.")
 
     if (df["playtime_forever"] < 0).any():
-        raise ValueError("음수 플레이타임이 존재합니다.")
+        raise ValueError("Negative playtime values were found.")
 
     if df.duplicated(
         ["user_id", "unified_game_id"]
     ).any():
-        raise ValueError("사용자-게임 중복 기록이 존재합니다.")
+        raise ValueError("Duplicate user-game interactions were found.")
 
     print("=" * 60)
     print("Steam User Playtime Concentration Analysis")
     print("=" * 60)
 
-    print(f"전체 소유 기록: {len(df):,}건")
-    print(f"전체 사용자: {df['user_id'].nunique():,}명")
+    print(f"Total ownership records: {len(df):,}")
+    print(f"Total users: {df['user_id'].nunique():,}")
 
     return df
 
@@ -147,7 +147,7 @@ def calculate_user_statistics(df):
 def analyze_overall(user_stats):
 
     print("\n" + "=" * 60)
-    print("1. 전체 사용자 집중도")
+    print("1. Overall User Playtime Concentration")
     print("=" * 60)
 
     total_users = len(user_stats)
@@ -164,37 +164,37 @@ def analyze_overall(user_stats):
         user_stats["played_games"] >= 2
     ]
 
-    print(f"전체 사용자: {total_users:,}명")
+    print(f"Total users: {total_users:,}")
 
     print(
-        f"플레이한 게임 없음: {len(no_play):,}명 "
+        f"Users with no played games: {len(no_play):,} "
         f"({len(no_play) / total_users * 100:.2f}%)"
     )
 
     print(
-        f"실제 플레이한 게임 1개: {len(one_game):,}명 "
+        f"Users with exactly one played game: {len(one_game):,} "
         f"({len(one_game) / total_users * 100:.2f}%)"
     )
 
     print(
-        f"실제 플레이한 게임 2개 이상: {len(multi_game):,}명 "
+        f"Users with two or more played games: {len(multi_game):,} "
         f"({len(multi_game) / total_users * 100:.2f}%)"
     )
 
     # Analyze users who played at least two games.
-    print("\n실제 플레이한 게임 2개 이상 사용자 기준")
+    print("\nUsers with two or more played games")
 
     if multi_game.empty:
-        print("분석 대상 사용자가 없습니다.")
+        print("No users meet the analysis criteria.")
         return
 
     print(
-        f"평균 집중도: "
+        f"Mean top-1 share: "
         f"{multi_game['top1_share'].mean() * 100:.2f}%"
     )
 
     print(
-        f"중앙값 집중도: "
+        f"Median top-1 share: "
         f"{multi_game['top1_share'].median() * 100:.2f}%"
     )
 
@@ -209,8 +209,8 @@ def analyze_overall(user_stats):
         )
 
         print(
-            f"집중도 {threshold * 100:.0f}% 이상: "
-            f"{count:,}명 ({percentage:.2f}%)"
+            f"Top-1 share >= {threshold * 100:.0f}%: "
+            f"{count:,} users ({percentage:.2f}%)"
         )
 
 
@@ -224,7 +224,7 @@ def analyze_heavy_players(user_stats):
     """
 
     print("\n" + "=" * 60)
-    print("2. 장시간 플레이 사용자 집중도")
+    print("2. Playtime Concentration Among Heavy Players")
     print("=" * 60)
 
     thresholds = [
@@ -241,14 +241,14 @@ def analyze_heavy_players(user_stats):
         ]
 
         print("\n" + "-" * 55)
-        print(f"최다 플레이 게임 {threshold:,}시간 이상")
+        print(f"Most-played game >= {threshold:,} hours")
         print("-" * 55)
 
         if selected.empty:
-            print("해당 사용자가 없습니다.")
+            print("No users meet this threshold.")
             continue
 
-        print(f"전체 사용자: {len(selected):,}명")
+        print(f"Total users: {len(selected):,}")
 
         # Users who played exactly one game.
         one_game = selected[
@@ -256,7 +256,7 @@ def analyze_heavy_players(user_stats):
         ]
 
         print(
-            f"1개 게임만 플레이: {len(one_game):,}명 "
+            f"Played exactly one game: {len(one_game):,} "
             f"({len(one_game) / len(selected) * 100:.2f}%)"
         )
 
@@ -266,15 +266,15 @@ def analyze_heavy_players(user_stats):
         ]
 
         if multi_game.empty:
-            print("2개 이상 게임을 플레이한 사용자가 없습니다.")
+            print("No users played two or more games.")
             continue
 
         print(
-            f"2개 이상 게임 플레이: {len(multi_game):,}명"
+            f"Played two or more games: {len(multi_game):,}"
         )
 
         print(
-            f"집중도 중앙값: "
+            f"Median top-1 share: "
             f"{multi_game['top1_share'].median() * 100:.2f}%"
         )
 
@@ -290,13 +290,13 @@ def analyze_heavy_players(user_stats):
             )
 
             print(
-                f"집중도 {share_threshold * 100:.0f}% 이상: "
-                f"{count:,}명 ({percentage:.2f}%)"
+                f"Top-1 share >= {share_threshold * 100:.0f}%: "
+                f"{count:,} users ({percentage:.2f}%)"
             )
 
         print(
-            f"실제 플레이한 게임 수 중앙값: "
-            f"{multi_game['played_games'].median():.1f}개"
+            f"Median number of played games: "
+            f"{multi_game['played_games'].median():.1f}"
         )
 
 
@@ -307,7 +307,7 @@ def analyze_heavy_players(user_stats):
 def analyze_by_max_playtime(user_stats):
 
     print("\n" + "=" * 60)
-    print("3. 최다 플레이타임 구간별 집중도")
+    print("3. Concentration by Maximum Game Playtime")
     print("=" * 60)
 
     # Exclude users who played fewer than two games.
@@ -380,8 +380,8 @@ def analyze_by_max_playtime(user_stats):
     summary["high_concentration_rate"] *= 100
 
     print(
-        "\n구간별 사용자 수 / 집중도 중앙값 / "
-        "집중도 80% 이상 비율"
+        "\nUsers by interval / Median top-1 share / "
+        "Share of users with top-1 concentration >= 80%"
     )
 
     print(
@@ -403,7 +403,7 @@ def analyze_by_max_playtime(user_stats):
         encoding="utf-8-sig"
     )
 
-    print(f"\n분석 결과 저장: {output_path}")
+    print(f"Analysis summary saved to: {output_path}")
 
     # Calculate the Spearman rank correlation.
     correlation = multi_game[
@@ -411,8 +411,8 @@ def analyze_by_max_playtime(user_stats):
     ].corr(method="spearman").iloc[0, 1]
 
     print(
-        f"\n최대 플레이타임과 집중도의 "
-        f"Spearman 상관계수: {correlation:.4f}"
+        f"\nSpearman correlation between maximum playtime "
+        f"and concentration: {correlation:.4f}"
     )
 
     return summary
@@ -485,7 +485,7 @@ def plot_concentration(user_stats):
 
     plt.close()
 
-    print(f"\n집중도 분포 그래프 저장: {output_path}")
+    print(f"Concentration distribution plot saved to: {output_path}")
 
 
 # ============================================================
@@ -532,7 +532,7 @@ def plot_concentration_by_playtime(summary):
 
     plt.close()
 
-    print(f"구간별 집중도 그래프 저장: {output_path}")
+    print(f"Concentration by playtime plot saved to: {output_path}")
 
 
 # ============================================================
@@ -562,7 +562,7 @@ def main():
     plot_concentration_by_playtime(summary)
 
     print("\n" + "=" * 60)
-    print("사용자별 플레이타임 집중도 분석 완료")
+    print("User playtime concentration analysis completed")
     print("=" * 60)
 
 

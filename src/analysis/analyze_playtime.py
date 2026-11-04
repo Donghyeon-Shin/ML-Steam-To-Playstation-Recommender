@@ -42,9 +42,9 @@ def load_playtime():
     print("Steam Playtime Distribution Analysis")
     print("=" * 55)
 
-    print(f"전체 소유 기록: {len(df):,}건")
-    print(f"결측값: {playtime.isna().sum():,}건")
-    print(f"음수: {(playtime < 0).sum():,}건")
+    print(f"Total ownership records: {len(df):,}")
+    print(f"Missing playtime values: {playtime.isna().sum():,}")
+    print(f"Negative playtime values: {(playtime < 0).sum():,}")
 
     # Exclude missing and invalid playtime values.
     playtime = playtime[
@@ -66,36 +66,36 @@ def analyze_statistics(playtime):
     positive = playtime[playtime > 0]
 
     print("\n" + "=" * 55)
-    print("1. 기본 통계")
+    print("1. Descriptive Statistics")
     print("=" * 55)
 
-    print(f"유효한 소유 기록: {total:,}건")
+    print(f"Valid ownership records: {total:,}")
 
     print(
-        f"플레이타임 0분: {zero_count:,}건 "
+        f"Zero-playtime records: {zero_count:,} "
         f"({zero_count / total * 100:.2f}%)"
     )
 
     print(
-        f"플레이타임 0분 초과: {len(positive):,}건 "
+        f"Positive-playtime records: {len(positive):,} "
         f"({len(positive) / total * 100:.2f}%)"
     )
 
-    print("\n전체 소유 게임 기준")
+    print("\nAll owned games")
 
-    print(f"평균: {playtime.mean() / 60:.2f}시간")
-    print(f"중앙값: {playtime.median() / 60:.2f}시간")
-    print(f"최댓값: {playtime.max() / 60:.2f}시간")
+    print(f"Mean: {playtime.mean() / 60:.2f} hours")
+    print(f"Median: {playtime.median() / 60:.2f} hours")
+    print(f"Maximum: {playtime.max() / 60:.2f} hours")
 
-    print("\n실제 플레이한 게임 기준 (0분 제외)")
+    print("\nPlayed games only (excluding zero playtime)")
 
     if positive.empty:
-        print("플레이타임이 0분을 초과하는 기록이 없습니다.")
+        print("No positive-playtime records are available.")
         return
 
-    print(f"평균: {positive.mean() / 60:.2f}시간")
-    print(f"중앙값: {positive.median() / 60:.2f}시간")
-    print(f"최댓값: {positive.max() / 60:.2f}시간")
+    print(f"Mean: {positive.mean() / 60:.2f} hours")
+    print(f"Median: {positive.median() / 60:.2f} hours")
+    print(f"Maximum: {positive.max() / 60:.2f} hours")
 
     # Calculate quantiles for games with positive playtime.
     percentiles = [
@@ -110,13 +110,13 @@ def analyze_statistics(playtime):
 
     quantiles = positive.quantile(percentiles)
 
-    print("\n플레이타임 분위수 (0분 제외)")
+    print("\nPlaytime quantiles (excluding zero playtime)")
 
     for percentile, value in quantiles.items():
 
         print(
             f"{percentile * 100:5.1f}%: "
-            f"{value / 60:,.2f}시간"
+            f"{value / 60:,.2f} hours"
         )
 
 
@@ -127,7 +127,7 @@ def analyze_statistics(playtime):
 def analyze_intervals(playtime):
 
     print("\n" + "=" * 55)
-    print("2. 플레이타임 구간별 분포")
+    print("2. Playtime Distribution by Interval")
     print("=" * 55)
 
     # Define interval boundaries in minutes.
@@ -143,13 +143,13 @@ def analyze_intervals(playtime):
     ]
 
     labels = [
-        "0분",
-        "0~30분",
-        "30분~2시간",
-        "2~10시간",
-        "10~30시간",
-        "30~100시간",
-        "100시간 초과"
+        "0 min",
+        "0-30 min",
+        "0.5-2 h",
+        "2-10 h",
+        "10-30 h",
+        "30-100 h",
+        "100+ h"
     ]
 
     intervals = pd.cut(
@@ -169,7 +169,7 @@ def analyze_intervals(playtime):
 
         print(
             f"{label:14s}: "
-            f"{count:10,}건 "
+            f"{count:10,} records "
             f"({percentage:6.2f}%)"
         )
 
@@ -226,7 +226,7 @@ def plot_intervals(percentages):
 
     plt.close()
 
-    print(f"\n구간별 그래프 저장: {output_path}")
+    print(f"Interval distribution plot saved to: {output_path}")
 
 
 # ============================================================
@@ -299,7 +299,7 @@ def plot_log_distribution(playtime):
 
     plt.close()
 
-    print(f"로그 스케일 그래프 저장: {output_path}")
+    print(f"Log-scale distribution plot saved to: {output_path}")
 
 
 # ============================================================
@@ -312,7 +312,7 @@ def main():
     playtime = load_playtime()
 
     if playtime.empty:
-        print("분석 가능한 데이터가 없습니다.")
+        print("No valid playtime data are available for analysis.")
         return
 
     # Print descriptive statistics.
@@ -326,7 +326,7 @@ def main():
 
     plot_log_distribution(playtime)
 
-    print("\n플레이타임 분포 분석 완료")
+    print("\nPlaytime distribution analysis completed")
 
 
 if __name__ == "__main__":
