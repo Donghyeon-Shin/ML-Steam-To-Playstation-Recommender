@@ -44,7 +44,13 @@ from als_playtime_gridsearch import (
 from als_playtime_positive_only import filter_positive_playtime
 
 
-BETA_GRID = [0.0, 0.1, 0.25, 0.5, 1.0, 2.0]
+# Coarse sweep followed by 0.5 and 0.25-step refinement near the peak.
+BETA_GRID = [
+    0.0, 0.1, 0.25, 0.5, 1.0, 2.0,
+    2.5, 3.0, 3.5, 3.75, 4.0, 4.25, 4.5, 4.75,
+    5.0, 5.25, 5.5, 6.0, 7.0,
+    8.0, 16.0, 32.0, 64.0,
+]
 RESULT_PATH = (
     PROJECT_DIR / "data" / "results"
     / "als_playtime_positive_only_gridsearch.csv"
@@ -91,7 +97,7 @@ def main():
     )
 
     print("\n" + "=" * 60)
-    print("Positive-Playtime-Only ALS - Small Beta Grid Search")
+    print("Positive-Playtime-Only ALS - Beta Grid Search")
     print("=" * 60)
     print(f"Excluded zero-playtime training interactions: {excluded_zero:,}")
     print(f"Remaining training interactions: {len(train_df):,}")
