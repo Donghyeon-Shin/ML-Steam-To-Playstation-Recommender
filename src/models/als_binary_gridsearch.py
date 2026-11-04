@@ -37,8 +37,8 @@ BATCH_SIZE = 256
 ITERATIONS = 40
 RANDOM_STATE = 42
 
-# Second-round grid search parameters
-FACTOR_GRID = [24]
+# Fine-grained factor comparison around the previously selected value.
+FACTOR_GRID = [16, 18, 20, 22, 24]
 REGULARIZATION_GRID = [5.0]
 ALPHA_GRID = [2]
 
