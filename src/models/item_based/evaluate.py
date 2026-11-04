@@ -8,7 +8,7 @@ from time import perf_counter
 import pandas as pd
 
 from src.evaluation.metrics import ranking_metrics
-from src.item_based.model import ItemBasedCF
+from src.models.item_based.model import ItemBasedCF
 
 
 def read_frame(directory, stem, file_format):

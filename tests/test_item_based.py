@@ -3,8 +3,8 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from src.item_based.model import ItemBasedCF
-from src.item_based.evaluate import evaluate
+from src.models.item_based.model import ItemBasedCF
+from src.models.item_based.evaluate import evaluate
 
 
 class ItemBasedTests(unittest.TestCase):
