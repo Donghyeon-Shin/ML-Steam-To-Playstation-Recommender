@@ -30,6 +30,7 @@ class TunedItemBasedCF(ItemBasedCF):
     def fit(self, train):
         # Validate with the original model before applying any transform.
         original_neighbors = self.neighbors
+        # Defer neighbor pruning until after weighting and support corrections.
         self.neighbors = 0
         try:
             super().fit(train)
@@ -38,6 +39,7 @@ class TunedItemBasedCF(ItemBasedCF):
                 times = pd.to_numeric(train.playtime_forever).to_numpy(dtype=float)
                 if self.time_unit == 'hours':
                     times = times / 60
+                # Estimate the cap from played games only, using Steam training data.
                 positive = times[times > 0]
                 if self.cap_quantile is not None and positive.size:
                     self.cap_value_ = float(np.quantile(positive, self.cap_quantile))
@@ -57,10 +59,12 @@ class TunedItemBasedCF(ItemBasedCF):
                 cols = train.unified_game_id.astype(str).map(self.item_to_index).to_numpy()
                 owned = csr_matrix((np.ones(len(train), dtype=np.float32), (rows, cols)),
                                    shape=(len(users), len(self.items)))
+                # Count co-owners independently of the playtime weights.
                 support = (owned.T @ owned).toarray()
                 if self.min_common_users:
                     self.similarity[support < self.min_common_users] = 0
                 if self.shrinkage:
+                    # Give less weight to similarities based on few co-owners.
                     self.similarity *= support / (support + self.shrinkage)
             # Threshold refers to the corrected similarity, before top-N pruning.
             self.similarity[self.similarity < self.min_similarity] = 0
