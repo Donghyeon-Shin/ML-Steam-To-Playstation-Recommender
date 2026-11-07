@@ -17,7 +17,7 @@ from implicit.cpu.als import AlternatingLeastSquares
 # 1. Configuration
 # ============================================================
 
-DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "processed"
+DATA_DIR = Path(__file__).resolve().parents[3] / "data" / "processed"
 
 TOP_K = 10
 BATCH_SIZE = 256

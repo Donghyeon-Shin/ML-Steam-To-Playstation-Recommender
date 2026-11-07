@@ -117,6 +117,19 @@ The exact minimum number of owned shared games, holdout ratio, random seeds, and
 - **Popularity baseline:** Rank games by Steam training-set ownership frequency, excluding observed games.
 - **Shared evaluation:** Exclude observed games from Top-K recommendations and evaluate using **Recall@10**, **NDCG@10**, and **Hit Rate@10** against held-out games.
 
+### ALS scripts
+
+All ALS training, grid search, PlayStation evaluation, and related analysis/plotting
+scripts live in `src/models/als/`. Run them from the repository root, for example:
+
+```bash
+python src/models/als/als_binary.py
+python src/models/als/als_playtime.py
+python src/models/als/als_ps_test.py
+```
+
+The popularity baseline is maintained separately in `src/baseline/`.
+
 ## Repository Structure
 
 ```text
@@ -135,6 +148,7 @@ steam-to-playstation-recommender/
 ├── src/
 │   ├── preprocessing/
 │   ├── models/
+│   │   └── als/            # ALS models, tuning, evaluation, and diagnostics
 │   └── evaluation/
 └── results/
 ```

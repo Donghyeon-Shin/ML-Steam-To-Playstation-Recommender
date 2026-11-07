@@ -2,7 +2,7 @@
 Temporary Playtime Weighted ALS experiment using positive-playtime training only.
 
 Run from the project root:
-    python src/models/als_playtime_positive_only.py
+    python src/models/als/als_playtime_positive_only.py
 
 Only Steam training interactions with playtime_forever == 0 are removed.
 The original Weighted ALS script and Steam validation splits remain unchanged.

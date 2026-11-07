@@ -18,7 +18,7 @@ from implicit.cpu.als import AlternatingLeastSquares
 # 1. Configuration
 # ============================================================
 
-PROJECT_DIR = Path(__file__).resolve().parents[2]
+PROJECT_DIR = Path(__file__).resolve().parents[3]
 DATA_DIR = PROJECT_DIR / "data" / "processed"
 
 TOP_K = 10

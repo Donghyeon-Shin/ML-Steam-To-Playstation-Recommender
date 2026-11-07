@@ -2,7 +2,7 @@
 Small beta grid search for Playtime Weighted ALS without zero-playtime training.
 
 Run from the project root:
-    python src/models/als_playtime_positive_only_gridsearch.py
+    python src/models/als/als_playtime_positive_only_gridsearch.py
 
 The beta=0 run is the binary-confidence baseline on the *filtered* dataset.
 Steam validation observed/held-out splits remain unchanged for every beta.
