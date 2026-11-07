@@ -9,6 +9,7 @@ from src.models.item_based.evaluate import evaluate
 
 class ItemBasedTests(unittest.TestCase):
     def setUp(self):
+        # Small fixture with overlapping libraries, missing pairs, and zero-playtime ownership.
         self.train = pd.DataFrame({
             "user_id": ["u1", "u1", "u2", "u2", "u2", "u3"],
             "unified_game_id": ["A", "B", "A", "B", "C", "C"],
@@ -17,14 +18,21 @@ class ItemBasedTests(unittest.TestCase):
 
     def test_cosine_and_exclusion(self):
         model = ItemBasedCF().fit(self.train)
+        # A and B share exactly the same owners. C shares one of its two owners
+        # with each of them, so the expected similarities are 1 and 0.5.
         np.testing.assert_allclose(model.similarity, [[0, 1, .5], [1, 0, .5], [.5, .5, 0]], atol=1e-6)
+        # Asking for more games than available still excludes A from the result.
         self.assertEqual(model.recommend(["A"], 10), ["B", "C"])
+        # C scores A and B equally; ascending game ID should put A first.
         self.assertEqual(model.recommend(["C"], 1), ["A"])
 
     def test_playtime_and_zero_ownership(self):
         model = ItemBasedCF("playtime").fit(self.train)
+        # Build the expected dense matrix by hand. Owned games with zero playtime
+        # have weight 1, and missing user–game pairs have weight 0.
         x = np.array([[1, 1 + np.log1p(10), 0],
                       [1 + np.log1p(20), 1, 1 + np.log1p(30)], [0, 0, 1]])
+        # Use a dense cosine calculation as a reference for the sparse implementation.
         x /= np.linalg.norm(x, axis=0)
         expected = x.T @ x
         np.fill_diagonal(expected, 0)
@@ -32,25 +40,31 @@ class ItemBasedTests(unittest.TestCase):
 
     def test_evaluation_known_answer(self):
         model = ItemBasedCF().fit(self.train)
+        # Show the validation user A and hide B, the expected top-ranked answer.
         observed = pd.DataFrame({"user_id": ["v"], "unified_game_id": ["A"]})
         heldout = pd.DataFrame({"user_id": ["v"], "unified_game_id": ["B"]})
         summary, per_user = evaluate(model, observed, heldout, k=1)
         self.assertEqual(summary["recall@1"], 1)
         self.assertEqual(summary["ndcg@1"], 1)
         self.assertEqual(summary["hit_rate@1"], 1)
+        # The evaluator should reject a game present in both input and ground truth.
         with self.assertRaises(ValueError):
             evaluate(model, observed, observed)
 
     def test_batch_and_neighbors(self):
         model = ItemBasedCF(neighbors=1).fit(self.train)
+        # Neighbor pruning limits each row to at most one nonzero connection.
         self.assertTrue((np.count_nonzero(model.similarity, axis=1) <= 1).all())
         histories = [["A"], ["C"], ["A", "B"]]
+        # Changing the batching strategy should preserve each user's ranked results.
         self.assertEqual(model.recommend_many(histories), [model.recommend(x) for x in histories])
 
     def test_invalid_data(self):
+        # Duplicating an interaction should be rejected before matrix construction.
         with self.assertRaises(ValueError):
             ItemBasedCF().fit(pd.concat([self.train, self.train.iloc[:1]]))
         model = ItemBasedCF().fit(self.train)
+        # Ranking requires a nonempty history composed of games in the trained catalog.
         with self.assertRaises(ValueError):
             model.recommend(["unknown"])
         with self.assertRaises(ValueError):

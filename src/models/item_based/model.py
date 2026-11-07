@@ -47,6 +47,7 @@ class ItemBasedCF:
         x = csr_matrix((weights, (users, games)), shape=(len(user_ids), len(self.items)))
         # L2-normalize each game column to compare ownership patterns by direction.
         norms = np.sqrt(np.asarray(x.multiply(x).sum(axis=0)).ravel())
+        # Broadcasting applies one inverse norm per column without densifying x.
         normalized = x.multiply(1.0 / norms).tocsr()
         # Dot products of unit-length game columns give pairwise cosine similarities.
         self.similarity = (normalized.T @ normalized).toarray().astype(np.float32)
@@ -92,6 +93,7 @@ class ItemBasedCF:
         )
         # Sum each candidate's similarity to the games in the user's history.
         scores = histories_matrix @ self.similarity
+        # Scores have shape (batch users, catalog games). Apply each user's own mask.
         recommendations = []
         for r, seen in enumerate(observed):
             # Mask observed games so they cannot appear in the top-k results.

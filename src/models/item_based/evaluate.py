@@ -37,6 +37,7 @@ def evaluate(model, observed, heldout, k=10, batch_size=256):
     # Every evaluated user needs both a profile and a held-out answer set.
     if not hidden_by_user or seen_by_user.keys() != hidden_by_user.keys():
         raise ValueError("Empty evaluation or observed/held-out user sets differ")
+    # Sort user IDs so saved per-user rows are reproducible across runs.
     users = sorted(hidden_by_user)
     for user in users:
         # A held-out game must never be visible in the same user's model input.
@@ -96,6 +97,7 @@ def main():
     pd.DataFrame([summary]).to_csv(args.output_dir / f"{name}_metrics.csv", index=False)
     # Keep individual scores available for user-level error analysis.
     per_user.to_csv(args.output_dir / f"{name}_per_user.csv", index=False)
+    # Record the full command configuration; convert Path values for JSON output.
     config = {key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()}
     (args.output_dir / f"{name}_config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
     print(json.dumps(summary, indent=2, ensure_ascii=False))
