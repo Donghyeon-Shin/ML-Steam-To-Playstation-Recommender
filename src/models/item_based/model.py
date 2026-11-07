@@ -38,9 +38,11 @@ class ItemBasedCF:
             # Retain zero-minute ownership with weight 1; unowned cells stay 0.
             weights = (1.0 + np.log1p(minutes)).astype(np.float32)
 
+        # Rows are Steam users and columns are games. Missing ownership stays zero.
         x = csr_matrix((weights, (users, games)), shape=(len(user_ids), len(self.items)))
         norms = np.sqrt(np.asarray(x.multiply(x).sum(axis=0)).ravel())
         normalized = x.multiply(1.0 / norms).tocsr()
+        # Dot products of unit-length game columns give pairwise cosine similarities.
         self.similarity = (normalized.T @ normalized).toarray().astype(np.float32)
         np.fill_diagonal(self.similarity, 0.0)
 
@@ -71,13 +73,16 @@ class ItemBasedCF:
             observed.append(indices)
             rows.extend([r] * len(indices))
             cols.extend(indices)
+        # Use binary ownership at inference so PlayStation users need no playtime data.
         histories_matrix = csr_matrix(
             (np.ones(len(cols), dtype=np.float32), (rows, cols)),
             shape=(len(histories), len(self.items)),
         )
+        # Sum each candidate's similarity to the games in the user's history.
         scores = histories_matrix @ self.similarity
         recommendations = []
         for r, seen in enumerate(observed):
+            # Mask observed games so they cannot appear in the top-k results.
             scores[r, seen] = -np.inf
             order = np.argsort(-scores[r], kind="stable")
             order = order[np.isfinite(scores[r, order])][:k]
