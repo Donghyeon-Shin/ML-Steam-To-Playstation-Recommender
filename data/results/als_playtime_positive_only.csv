@@ -1,0 +1,2 @@
+experiment,factors,regularization,iterations,random_state,owner_alpha,playtime_beta,cap_percentile,cap_hours,original_train_interactions,excluded_zero_interactions,train_interactions,train_users,candidate_games,validation_users,validation_users_without_known_observed,heldout_interactions_in_catalog,recall_at_10,ndcg_at_10,hit_at_10
+positive_playtime_only,24,5.0,40,42,2,0.1,0.75,10.416666666666666,4334384,1638095,2696289,62418,4331,12657,0,220821,0.27711012546813935,0.34003908972732816,0.8361381053962235
