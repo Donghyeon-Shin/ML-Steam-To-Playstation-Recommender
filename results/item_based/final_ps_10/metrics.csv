@@ -1,0 +1,2 @@
+split,validation_trial,candidate_games,k,weighting,neighbors,shrinkage,min_common_users,min_similarity,users,recall@10,ndcg@10,hit_rate@10
+playstation_test,34,4399,10,binary,20,100,20,0,44743,0.08784442196740411,0.1227433401304598,0.6201193482779429
