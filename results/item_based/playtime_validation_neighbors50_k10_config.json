@@ -1,0 +1,10 @@
+{
+  "weighting": "playtime",
+  "split": "validation",
+  "neighbors": 50,
+  "k": 10,
+  "batch_size": 256,
+  "data_dir": "data\\processed",
+  "format": "parquet",
+  "output_dir": "results\\item_based"
+}

@@ -1,0 +1,3 @@
+weighting,reference_ndcg@10,best_tuned_ndcg@10,difference,relative_change_percent,best_trial,neighbors,shrinkage,beta,cap_quantile,min_common_users,min_similarity
+binary,0.2383956468993882,0.2888347940089622,0.050439147109574034,21.1577466978083,34,20,100,,,20.0,0.0
+playtime,0.2346449655031545,0.2888347940089622,0.054189828505807724,23.094392155232168,42,20,100,0.0,,20.0,0.0

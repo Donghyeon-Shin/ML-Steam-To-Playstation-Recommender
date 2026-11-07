@@ -1,0 +1,2 @@
+users,recall@10,ndcg@10,hit_rate@10,model,split,neighbors,k,candidate_games,fit_seconds,evaluation_seconds,playtime_formula
+44743,0.0711818165775136,0.09214872847583416,0.5022685112755068,item_based_playtime,test,0,10,4399,12.083697800000664,116.12394810002297,1 + ln(1 + minutes) on owned pairs

@@ -1,0 +1,55 @@
+{
+  "selection_metric": "ndcg@10",
+  "tie_rule": "first enumerated",
+  "search": "staged, not exhaustive joint search",
+  "data_sha256": {
+    "steam_train.parquet": "f0d474ed67ec530b6ca60a291be5fa4c3ff90a6bfef85779118dce19843e7ddc",
+    "steam_val_observed.parquet": "be48d5d9098a4dc9972656a558056ea5f2ff3dedb17e1e06c682d1f88e6f5897",
+    "steam_val_heldout.parquet": "f6d59d4c0acc99b86fce3dce7e2cdcd4c1854ce3d5eae06254498ee7487b73a0"
+  },
+  "options": {
+    "data_dir": "data\\processed",
+    "format": "parquet",
+    "output_dir": "results\\item_based\\tuning_10",
+    "neighbors": [
+      0,
+      20,
+      50,
+      100,
+      200,
+      500
+    ],
+    "shrinkage": [
+      0,
+      10,
+      50,
+      100
+    ],
+    "betas": [
+      0,
+      0.1,
+      0.25,
+      0.5,
+      1
+    ],
+    "cap_quantiles": [
+      0.5,
+      0.75,
+      0.9,
+      0.99
+    ],
+    "batch_size": 256,
+    "min_common_users": [
+      0,
+      5,
+      20,
+      50
+    ],
+    "min_similarity": [
+      0,
+      0.01,
+      0.05,
+      0.1
+    ]
+  }
+}
