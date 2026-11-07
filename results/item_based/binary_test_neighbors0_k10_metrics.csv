@@ -1,0 +1,2 @@
+users,recall@10,ndcg@10,hit_rate@10,model,split,neighbors,k,candidate_games,fit_seconds,evaluation_seconds,playtime_formula
+44743,0.06322868960165498,0.08418842902929873,0.455132646447489,item_based_binary,test,0,10,4399,14.815404400054831,133.86873609997565,
