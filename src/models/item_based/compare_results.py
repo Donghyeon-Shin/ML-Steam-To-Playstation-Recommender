@@ -9,14 +9,17 @@ def create_report(directory):
     directory = Path(directory)
     df = pd.read_csv(directory / 'grid_results.csv')
     score = 'ndcg@10'
+    # Preserve trial order for equal NDCG scores, matching the selection tie rule.
     ranked = df.sort_values(score, ascending=False, kind='stable')
     ranked.to_csv(directory / 'ranked_results.csv', index=False)
     comparisons = []
     for mode in ['binary', 'playtime']:
+        # Compare each weighting mode to its own reference configuration.
         reference = df[(df.stage == 'reference') & (df.weighting == mode)].iloc[0]
         candidates = ranked[(ranked.stage != 'reference') & (ranked.weighting == mode)]
         if candidates.empty:
             continue
+        # Candidates are already ranked, so the first row is the best tuned trial.
         best = candidates.iloc[0]
         comparisons.append({'weighting': mode, 'reference_ndcg@10': reference[score],
             'best_tuned_ndcg@10': best[score], 'difference': best[score] - reference[score],
@@ -32,6 +35,7 @@ def create_report(directory):
                 '<p>Selection: maximum mean NDCG@10. Staged search, not exhaustive joint search. '
                 'Independent scales per heatmap. Missing cells were not evaluated.</p>',
                 '<h2>Reference vs tuned best</h2>', summary.to_html(index=False, float_format=lambda x:f'{x:.6f}')]
+    # Give each search stage a heatmap with the two parameters varied in that stage.
     for stage, row_key, col_key in [('binary_grid','neighbors','shrinkage'),
                                     ('binary_filters','min_common_users','min_similarity'),
                                     ('playtime_grid','beta','cap_quantile'),
@@ -40,10 +44,12 @@ def create_report(directory):
         part = df[df.stage == stage].copy()
         if part.empty:
             continue
+        # Retain the uncapped setting as a visible column when pivoting the table.
         if col_key == 'cap_quantile':
             part[col_key] = part[col_key].map(lambda v: 'none' if pd.isna(v) else str(v))
         pivot = part.pivot_table(index=row_key, columns=col_key, values=score, aggfunc='first')
         pivot.to_csv(directory / f'{stage}_ndcg.csv')
+        # Scale shading within this stage; color intensity is local to each heatmap.
         low, high = part[score].min(), part[score].max()
         sections.append(f'<h2>{stage}: {row_key} × {col_key}</h2><table><tr><th>{row_key}</th>')
         sections.extend(f'<th>{escape(str(c))}</th>' for c in pivot.columns)
@@ -51,6 +57,7 @@ def create_report(directory):
         for label, row in pivot.iterrows():
             sections.append(f'<tr><th>{escape(str(label))}</th>')
             for value in row:
+                # Mark parameter combinations the search did not evaluate.
                 if pd.isna(value):
                     sections.append('<td>—</td>')
                 else:
@@ -61,6 +68,7 @@ def create_report(directory):
         sections.append('</table>')
     sections.extend(['<h2>All trials, descending NDCG@10</h2>',
                      ranked.to_html(index=False, float_format=lambda x:f'{x:.6f}')])
+    # Write a standalone HTML report that can be opened without extra packages.
     html = '<!doctype html><meta charset="utf-8"><title>Item-Based tuning</title><style>' \
            'body{font-family:system-ui;margin:32px}table{border-collapse:collapse;margin-bottom:24px}' \
            'th,td{border:1px solid #ccc;padding:8px;text-align:right}th{background:#eee}' \
