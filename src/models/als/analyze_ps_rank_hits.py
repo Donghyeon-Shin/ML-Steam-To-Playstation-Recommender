@@ -5,7 +5,7 @@ the same Steam-trained Binary ALS and PS-observed popularity baseline as
 als_ps_test.py, without modifying the original evaluation results.
 
 Run from the project root:
-    python src/models/analyze_ps_rank_hits.py
+    python src/models/als/analyze_ps_rank_hits.py
 """
 
 import als_ps_test as evaluation

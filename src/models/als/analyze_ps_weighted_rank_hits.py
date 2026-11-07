@@ -2,7 +2,7 @@
 
 This reproduces the existing PS test protocol without tuning parameters.
 Run from repository root:
-    python src/models/analyze_ps_weighted_rank_hits.py
+    python src/models/als/analyze_ps_weighted_rank_hits.py
 """
 
 import numpy as np

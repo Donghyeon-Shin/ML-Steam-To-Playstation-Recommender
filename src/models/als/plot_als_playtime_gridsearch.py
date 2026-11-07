@@ -4,7 +4,7 @@ Requirements:
     python -m pip install pandas numpy matplotlib seaborn
 
 Run from your repository root:
-    python src/models/plot_als_playtime_gridsearch.py --csv data/results/als_playtime_gridsearch.csv --output-dir data/results/als_playtime_figures
+    python src/models/als/plot_als_playtime_gridsearch.py --csv data/results/als_playtime_gridsearch.csv --output-dir data/results/als_playtime_figures
 
 The script writes two figures as 300-DPI PNG and editable SVG files.
 Metrics are read from the original CSV, with no interpolation or fabricated rows.
